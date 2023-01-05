@@ -72,7 +72,7 @@ BOOL BF::ListProcessModules(const UINT dwProcessId, const WCHAR szModule[MAX_MOD
 	return FALSE;
 }
 
-UINT_PTR Memory::Pointers::Pattern::AOBScan(const string_view pattern)
+DWORD_PTR Memory::Pointers::Pattern::AOBScan(const string_view pattern)
 {
 	constexpr auto CHUNK_SIZE = 0x1000;
 
@@ -109,7 +109,7 @@ UINT_PTR Memory::Pointers::Pattern::AOBScan(const string_view pattern)
 	size_t     i      = GTA5.BaseAddr;
 	const auto membuf = new UINT8[CHUNK_SIZE];
 
-	UINT_PTR ret = 0;
+	DWORD_PTR ret = 0;
 
 	while (!ret)
 	{
@@ -188,38 +188,8 @@ Memory::Memory(wstring_view name): ProcessName(name)
 		throw exception("未找到 GTA5 进程");
 	}
 
-	BaseAddr = reinterpret_cast <UINT_PTR>(ME32.modBaseAddr);
+	BaseAddr = reinterpret_cast <DWORD_PTR>(ME32.modBaseAddr);
 	Size     = ME32.modBaseSize;
-}
-
-template <typename T> T Memory::read(DWORD_PTR BaseAddress, const vector <INT64>& offsets) const
-{
-	T ret = 0;
-	for (const auto offset : offsets)
-	{
-		if (BaseAddress == 0)
-		{
-			return T();
-		}
-		read_memory <DWORD_PTR>(LPVOID_t(BaseAddress).ptr, &BaseAddress);
-		BaseAddress = BaseAddress + offset;
-	}
-	read_memory <T>(LPVOID_t(BaseAddress).ptr, &ret);
-	return ret;
-}
-
-template <typename T> void Memory::write(DWORD_PTR BaseAddress, T value, const vector <INT64>& offsets) const
-{
-	for (const auto offset : offsets)
-	{
-		if (BaseAddress == 0)
-		{
-			return;
-		}
-		read_memory <DWORD_PTR>(LPVOID_t(BaseAddress).ptr, &BaseAddress);
-		BaseAddress = BaseAddress + offset;
-	}
-	write_memory <T>(LPVOID_t(BaseAddress).ptr, &value);
 }
 
 string Memory::read_str(DWORD_PTR BaseAddress, const SIZE_T nSize, const vector <INT64>& offsets) const

@@ -4,11 +4,12 @@
 
 namespace BF
 {
-	typedef struct ST_WNDINFO
+	using WNDINFO = struct ST_WNDINFO
 	{
 		HWND  hWnd;
 		DWORD dwProcessId;
-	}         WNDINFO, *LPWNDINFO;
+	};
+	using LPWNDINFO = WNDINFO*;
 
 	union LPWNDINFO_t
 	{
@@ -38,32 +39,32 @@ namespace BF
 		UINT         ProcessID     = NULL;
 		HANDLE       ProcessHandle = nullptr;
 		HWND         ProcessHWND   = nullptr;
-		UINT_PTR     BaseAddr      = NULL;
+		DWORD_PTR    BaseAddr      = NULL;
 		UINT         Size          = NULL;
 
 		struct Pointers
 		{
-			UINT_PTR WorldPTR           = NULL;
-			UINT_PTR BlipPTR            = NULL;
-			UINT_PTR ReplayInterfacePTR = NULL;
-			UINT_PTR LocalScriptsPTR    = NULL;
-			UINT_PTR GlobalPTR          = NULL;
-			UINT_PTR PlayerCountPTR     = NULL;
-			UINT_PTR PickupDataPTR      = NULL;
-			UINT_PTR WeatherADDR        = NULL;
-			UINT_PTR SettingsPTRs       = NULL;
-			UINT_PTR AimCPedPTR         = NULL;
-			UINT_PTR FriendListPTR      = NULL;
-			UINT_PTR ThermalADDR        = NULL;
-			UINT_PTR NightVisionADDR    = NULL;
-			UINT_PTR BlackoutADDR       = NULL;
+			DWORD_PTR WorldPTR           = NULL;
+			DWORD_PTR BlipPTR            = NULL;
+			DWORD_PTR ReplayInterfacePTR = NULL;
+			DWORD_PTR LocalScriptsPTR    = NULL;
+			DWORD_PTR GlobalPTR          = NULL;
+			DWORD_PTR PlayerCountPTR     = NULL;
+			DWORD_PTR PickupDataPTR      = NULL;
+			DWORD_PTR WeatherADDR        = NULL;
+			DWORD_PTR SettingsPTRs       = NULL;
+			DWORD_PTR AimCPedPTR         = NULL;
+			DWORD_PTR FriendListPTR      = NULL;
+			DWORD_PTR ThermalADDR        = NULL;
+			DWORD_PTR NightVisionADDR    = NULL;
+			DWORD_PTR BlackoutADDR       = NULL;
 
 			class Pattern
 			{
 				string_view name;
-				UINT_PTR    address;
+				DWORD_PTR   address;
 
-				static UINT_PTR AOBScan(string_view pattern);
+				static DWORD_PTR AOBScan(string_view pattern);
 
 				public:
 					[[nodiscard]] Pattern rip() const;
@@ -71,8 +72,8 @@ namespace BF
 					Pattern(const string_view name, const string_view pattern): name(name),
 																				address(AOBScan(pattern)) {}
 
-					Pattern(const string_view name, const UINT_PTR address): name(name),
-																			 address(address) {}
+					Pattern(const string_view name, const DWORD_PTR address): name(name),
+																			  address(address) {}
 
 					[[nodiscard]] Pattern add(const size_t n) const
 					{
@@ -84,7 +85,7 @@ namespace BF
 						return { name, address - n };
 					}
 
-					[[nodiscard]] explicit operator UINT_PTR() const
+					[[nodiscard]] explicit operator DWORD_PTR() const
 					{
 						return address;
 					}
@@ -92,20 +93,20 @@ namespace BF
 
 			Pointers() = default;
 
-			explicit Pointers(bool) : WorldPTR(Pattern("WorldPTR", "48 8B 05 ? ? ? ? 45 ? ? ? ? 48 8B 48 08 48 85 C9 74 07").add(3).rip()),
-									  BlipPTR(Pattern("BlipPTR", "4C 8D 05 ? ? ? ? 0F B7 C1").add(3).rip()),
-									  ReplayInterfacePTR(Pattern("ReplayInterfacePTR", "48 8D 0D ? ? ? ? 48 8B D7 E8 ? ? ? ? 48 8D 0D ? ? ? ? 8A D8 E8").add(3).rip()),
-									  LocalScriptsPTR(Pattern("LocalScriptsPTR", "48 8B 05 ? ? ? ? 8B CF 48 8B 0C C8 39 59 68").add(3).rip()),
-									  GlobalPTR(Pattern("GlobalPTR", "4C 8D 05 ? ? ? ? 4D 8B 08 4D 85 C9 74 11").add(3).rip()),
-									  PlayerCountPTR(Pattern("PlayerCountPTR", "48 8B 0D ? ? ? ? E8 ? ? ? ? 48 8B C8 E8 ? ? ? ? 48 8B CF").add(3).rip()),
-									  PickupDataPTR(Pattern("PickupDataPTR", "48 8B 05 ? ? ? ? 48 8B 1C F8 8B").add(3).rip()),
-									  WeatherADDR(Pattern("WeatherADDR", "48 83 EC ? 8B 05 ? ? ? ? 8B 3D ? ? ? ? 49").add(6).rip().add(6)),
-									  SettingsPTRs(Pattern("SettingsPTRs", "44 39 05 ? ? ? ? 75 0D").add(3).rip().add(0x89 - 4)),
-									  AimCPedPTR(Pattern("AimCPedPTR", "48 8B 0D ? ? ? ? 48 85 C9 74 0C 48 8D 15 ? ? ? ? E8 ? ? ? ? 48 89 1D").add(3).rip()),
-									  FriendListPTR(Pattern("FriendListPTR", "48 8B 0D ? ? ? ? 8B C6 48 8D 5C 24 70").add(3).rip()),
-									  ThermalADDR(Pattern("ThermalADDR", "48 83 EC ? 80 3D ? ? ? ? 00 74 0C C6 81").add(6).rip().add(7)),
-									  NightVisionADDR(Pattern("NightVisionADDR", "48 8B D7 48 8B C8 E8 ? ? ? ? 80 3D").add(13).rip().add(14)),
-									  BlackoutADDR(Pattern("BlackoutADDR", "48 8B D1 8B 0D ? ? ? ? 45 8D 41 FC E9 ? ? ? ? 48 83").add(31).rip().add(31)) { }
+			explicit Pointers(bool /*unused*/) : WorldPTR(Pattern("WorldPTR", "48 8B 05 ? ? ? ? 45 ? ? ? ? 48 8B 48 08 48 85 C9 74 07").add(3).rip()),
+												 BlipPTR(Pattern("BlipPTR", "4C 8D 05 ? ? ? ? 0F B7 C1").add(3).rip()),
+												 ReplayInterfacePTR(Pattern("ReplayInterfacePTR", "48 8D 0D ? ? ? ? 48 8B D7 E8 ? ? ? ? 48 8D 0D ? ? ? ? 8A D8 E8").add(3).rip()),
+												 LocalScriptsPTR(Pattern("LocalScriptsPTR", "48 8B 05 ? ? ? ? 8B CF 48 8B 0C C8 39 59 68").add(3).rip()),
+												 GlobalPTR(Pattern("GlobalPTR", "4C 8D 05 ? ? ? ? 4D 8B 08 4D 85 C9 74 11").add(3).rip()),
+												 PlayerCountPTR(Pattern("PlayerCountPTR", "48 8B 0D ? ? ? ? E8 ? ? ? ? 48 8B C8 E8 ? ? ? ? 48 8B CF").add(3).rip()),
+												 PickupDataPTR(Pattern("PickupDataPTR", "48 8B 05 ? ? ? ? 48 8B 1C F8 8B").add(3).rip()),
+												 WeatherADDR(Pattern("WeatherADDR", "48 83 EC ? 8B 05 ? ? ? ? 8B 3D ? ? ? ? 49").add(6).rip().add(6)),
+												 SettingsPTRs(Pattern("SettingsPTRs", "44 39 05 ? ? ? ? 75 0D").add(3).rip().add(0x89 - 4)),
+												 AimCPedPTR(Pattern("AimCPedPTR", "48 8B 0D ? ? ? ? 48 85 C9 74 0C 48 8D 15 ? ? ? ? E8 ? ? ? ? 48 89 1D").add(3).rip()),
+												 FriendListPTR(Pattern("FriendListPTR", "48 8B 0D ? ? ? ? 8B C6 48 8D 5C 24 70").add(3).rip()),
+												 ThermalADDR(Pattern("ThermalADDR", "48 83 EC ? 80 3D ? ? ? ? 00 74 0C C6 81").add(6).rip().add(7)),
+												 NightVisionADDR(Pattern("NightVisionADDR", "48 8B D7 48 8B C8 E8 ? ? ? ? 80 3D").add(13).rip().add(14)),
+												 BlackoutADDR(Pattern("BlackoutADDR", "48 8B D1 8B 0D ? ? ? ? 45 8D 41 FC E9 ? ? ? ? 48 83").add(31).rip().add(31)) {}
 		};
 
 		public:
@@ -114,8 +115,35 @@ namespace BF
 			Memory() = default;
 			explicit Memory(wstring_view name);
 
-			template <typename T> T    read(DWORD_PTR BaseAddress, const vector <INT64>& offsets = {}) const;
-			template <typename T> void write(DWORD_PTR BaseAddress, T value, const vector <INT64>& offsets = {}) const;
+			template <typename T> T read(DWORD_PTR BaseAddress, const vector <INT64>& offsets = {}) const
+			{
+				T ret = 0;
+				for (const auto offset : offsets)
+				{
+					if (BaseAddress == 0)
+					{
+						return T();
+					}
+					read_memory <DWORD_PTR>(LPVOID_t(BaseAddress).ptr, &BaseAddress);
+					BaseAddress = BaseAddress + offset;
+				}
+				read_memory <T>(LPVOID_t(BaseAddress).ptr, &ret);
+				return ret;
+			}
+
+			template <typename T> void write(DWORD_PTR BaseAddress, T value, const vector <INT64>& offsets = {}) const
+			{
+				for (const auto offset : offsets)
+				{
+					if (BaseAddress == 0)
+					{
+						return;
+					}
+					read_memory <DWORD_PTR>(LPVOID_t(BaseAddress).ptr, &BaseAddress);
+					BaseAddress = BaseAddress + offset;
+				}
+				write_memory <T>(LPVOID_t(BaseAddress).ptr, &value);
+			}
 
 			template <typename T> void write(DWORD_PTR BaseAddress, const vector <INT64>& offsets, T value) const
 			{
@@ -164,7 +192,7 @@ namespace BF
 			{
 				for (auto i = 0; i < 54; i++)
 				{
-					if (string str = read_str(pointers.LocalScriptsPTR, MAX_PATH, { static_cast <INT64>(i) * 0x8, 0xD0 }); str == name)
+					if (const string str = read_str(pointers.LocalScriptsPTR, MAX_PATH, { static_cast <INT64>(i) * 0x8, 0xD0 }); str == name)
 					{
 						return read <INT64>(pointers.LocalScriptsPTR, { static_cast <INT64>(i) * 0x8, 0xB0 }) + 8ll * index;
 					}
@@ -207,7 +235,7 @@ namespace BF
 				return ProcessID;
 			}
 
-			[[nodiscard]] UINT_PTR baseAddr() const
+			[[nodiscard]] DWORD_PTR baseAddr() const
 			{
 				return BaseAddr;
 			}

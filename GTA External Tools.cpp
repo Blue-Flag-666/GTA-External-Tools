@@ -2,7 +2,6 @@
 
 #include "pch.hpp"
 #include "GTA External Tools.hpp"
-
 #include "Memory.hpp"
 
 // 全局变量:
@@ -149,7 +148,7 @@ LRESULT CALLBACK WndProc(const HWND hWnd, const UINT msg, const WPARAM wParam, c
 {
 	if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam))
 	{
-		return true;
+		return TRUE;
 	}
 	switch (msg)
 	{
@@ -288,16 +287,17 @@ void InitWindow()
 	{
 		WINDOWINFO info;
 		GetWindowInfo(FindWindowA("grcWindow", nullptr), &info);
-		MoveWindow(OverlayHWND, info.rcClient.left, info.rcClient.top, info.rcClient.right - info.rcClient.left, info.rcClient.bottom - info.rcClient.top, true);
+		MoveWindow(OverlayHWND, info.rcClient.left, info.rcClient.top, info.rcClient.right - info.rcClient.left, info.rcClient.bottom - info.rcClient.top, TRUE);
 		MainWindow();
 	}
 }
 
 void MainWindow()
 {
+	ImGui::ShowDemoWindow();
 	ImGui::Begin("GTA External Tools", &no_kill, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize);
 	{
-		static auto show_global_local_scanner = false;
+		static auto show_global_local_scanner = false, first_run_global_local_scanner = true;
 
 		ImGui::Text("Hello!");
 
@@ -308,7 +308,7 @@ void MainWindow()
 
 		if (show_global_local_scanner)
 		{
-			GlobalLocalScanner(show_global_local_scanner);
+			GlobalLocalScanner(show_global_local_scanner, first_run_global_local_scanner);
 		}
 
 		{
@@ -326,12 +326,451 @@ void MainWindow()
 	ImGui::End();
 }
 
-void GlobalLocalScanner(bool& show)
+void GlobalLocalScanner(bool& show, bool& first)
 {
-	ImGui::Begin("Global/Local Scanner", &show, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize);
+	ImGui::Begin("Global/Local Scanner", &show, ImGuiWindowFlags_NoCollapse);
 	{
-		ImGui::Text("Hello!");
-		//TODO
+		if (first)
+		{
+			ImGui::SetWindowSize(ImVec2(540, 0));
+			first = false;
+		}
+		static set <Scan_Result> scan_addr;
+		static set <Scan_Item>   chosen_addr;
+		static int               scan_type = SCAN_INT;
+		static Scan_Value        value;
+		static int               begin,                end;
+		static float             scanner_height = 220, list_height = 200;
+
+		if (static float last_height = 420; !equal(last_height, ImGui::GetContentRegionAvail().y))
+		{
+			const float height = ImGui::GetContentRegionAvail().y - ImGui::GetStyle().ItemSpacing.y;
+			scanner_height     = max(220, height/(last_height-ImGui::GetStyle().ItemSpacing.y)*scanner_height);
+			list_height        = max(200, height - scanner_height);
+			scanner_height     = max(220, height - list_height);
+			last_height        = ImGui::GetContentRegionAvail().y;
+		}
+
+		ImGui::Splitter(false, 3, &scanner_height, &list_height, 220, 200);
+
+		ImGui::BeginChild("Scanner", ImVec2(0, scanner_height), false, ImGuiWindowFlags_AlwaysAutoResize);
+		{
+			static float option_width = 270, result_width = 250;
+
+			if (static float last_width = 520; !equal(last_width, ImGui::GetContentRegionAvail().x))
+			{
+				const float width = ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x;
+				option_width      = max(270, width/(last_width - ImGui::GetStyle().ItemSpacing.x)*option_width);
+				result_width      = max(250, width-option_width);
+				option_width      = max(270, width-result_width);
+				last_width        = ImGui::GetContentRegionAvail().x;
+			}
+
+			ImGui::Splitter(true, 3, &option_width, &result_width, 270, 250);
+
+			ImGui::BeginChild("Scan Option", ImVec2(option_width, 0));
+			{
+				if (ImGui::Button("First Scan"))
+				{
+					scan_addr.clear();
+					ScanGlobalLocal(scan_addr, scan_type, value);
+				}
+				ImGui::SameLine();
+				if (ImGui::Button("Next Scan"))
+				{
+					ScanGlobalLocal(scan_addr, scan_type, value);
+				}
+				ImGui::Spacing(5);
+				ImGui::SameLine();
+				ImGui::Text("Count: %lld", scan_addr.size());
+
+				{
+					const char* items[]  = { "Bool", "Number", "String" };
+					static auto cur_item = 1;
+					ImGui::Combo("Scan Type", &cur_item, items,IM_ARRAYSIZE(items));
+
+					switch (cur_item)
+					{
+						case 0:
+						{
+							scan_type = SCAN_BOOL;
+							break;
+						}
+						case 1:
+						{
+							if (scan_type & SCAN_NUMBER)
+							{
+								bool scan_float = scan_type & SCAN_FLOAT, scan_int = scan_type & SCAN_INT, scan_uint = scan_type & SCAN_UINT;
+								ImGui::Checkbox("Float", &scan_float);
+								ImGui::SameLine();
+								ImGui::Checkbox("Int", &scan_int);
+								ImGui::SameLine();
+								ImGui::Checkbox("UInt", &scan_uint);
+								if (const auto new_scan_type = (scan_float ? SCAN_FLOAT : SCAN_NONE) | (scan_int ? SCAN_INT : SCAN_NONE) | (scan_uint ? SCAN_UINT : SCAN_NONE))
+								{
+									scan_type = new_scan_type;
+								}
+							}
+							else
+							{
+								scan_type = SCAN_INT;
+							}
+							break;
+						}
+						case 2:
+						{
+							scan_type = SCAN_STRING;
+							break;
+						}
+						default: ;
+					}
+				}
+
+				if (scan_type & SCAN_BOOL)
+				{
+					ImGui::RadioButton("True", reinterpret_cast <int*>(&value.bool_value), true);
+					ImGui::SameLine();
+					ImGui::RadioButton("False", reinterpret_cast <int*>(&value.bool_value), false);
+				}
+				else if (scan_type & SCAN_STRING)
+				{
+					ImGui::InputText("Value", value.str_value.data(), 0xff);
+				}
+				else
+				{
+					if (scan_type & SCAN_FLOAT)
+					{
+						auto x = static_cast <double>(value.float_value);
+						ImGui::InputDouble("Value", &x);
+						value = Scan_Value(x);
+					}
+					else if (scan_type & SCAN_UINT)
+					{
+						UINT x = value.uint_value;
+						ImGui::InputScalar("Value", ImGuiDataType_U32, &x);
+						value = Scan_Value(x);
+					}
+					else
+					{
+						int x = value.int_value;
+						ImGui::InputInt("Value", &x, 0);
+						value = Scan_Value(x);
+					}
+				}
+
+				ImGui::Separator();
+				ImGui::Text("Scan Options");
+				ImGui::InputInt("Begin", &begin, 0);
+				ImGui::InputInt("End", &end, 0);
+			}
+			ImGui::EndChild();
+
+			ImGui::SameLine();
+			ImGui::BeginChild("Scan Result", ImVec2(result_width, ImGui::GetContentRegionAvail().y - ImGui::GetStyle().ItemSpacing.y));
+			{
+				/*if (scan_addr.empty())//debug
+				{
+					for (auto i = 1; i <= 100; i++)
+					{
+						scan_addr.insert({ i * 8, SCAN_BOOL });
+					}
+				}*/
+				if (ImGui::BeginTable("Result Table", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersV | ImGuiTableFlags_BordersH | ImGuiTableFlags_ScrollY))
+				{
+					ImGui::TableSetupColumn("Offset");
+					ImGui::TableSetupColumn("Address");
+					ImGui::TableSetupColumn("Value");
+					ImGui::TableSetupScrollFreeze(0, 1);
+					ImGui::TableHeadersRow();
+					{
+						static set <const Scan_Result*> selection;
+						for (auto& item : scan_addr)
+						{
+							const bool selected = selection.contains(&item);
+
+							ImGui::TableNextRow();
+
+							if (ImGui::TableSetColumnIndex(0))
+							{
+								if (ImGui::Selectable(std::to_string(item.Offset).c_str(), selected, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowItemOverlap))
+								{
+									if (ImGui::GetIO().KeyCtrl)
+									{
+										if (selected)
+										{
+											selection.erase(&item);
+										}
+										else
+										{
+											selection.insert(&item);
+										}
+									}
+									else
+									{
+										selection.clear();
+										selection.insert(&item);
+									}
+								}
+							}
+
+							if (ImGui::TableSetColumnIndex(1))
+							{
+								ImGui::Text("%08llX", GTA5.get_global_addr(item.Offset));
+							}
+
+							if (ImGui::TableSetColumnIndex(2))
+							{
+								switch (item.Type)
+								{
+									case SCAN_BOOL:
+									{
+										ImGui::Text(GTA5.get_global <bool>(item.Offset) ? "True" : "False");
+										break;
+									}
+									case SCAN_FLOAT:
+									{
+										ImGui::Text("%f", static_cast <double>(GTA5.get_global <float>(item.Offset)));
+										break;
+									}
+									case SCAN_INT:
+									{
+										ImGui::Text("%d", GTA5.get_global <int>(item.Offset));
+										break;
+									}
+									case SCAN_UINT:
+									{
+										ImGui::Text("%u", GTA5.get_global <UINT>(item.Offset));
+										break;
+									}
+									case SCAN_STRING:
+									{
+										//TODO
+										//ImGui::Text("%s", GTA5.get_global <string>(item.Offset).c_str());
+										break;
+									}
+									case SCAN_NUMBER:
+									case SCAN_NONE: ;
+								}
+							}
+						}
+					}
+					ImGui::EndTable();
+				}
+			}
+			ImGui::EndChild();
+		}
+		ImGui::EndChild();
+
+		ImGui::Spacing();
+		ImGui::BeginChild("Address List", ImVec2(0, list_height));
+		{
+			{
+				/*if (chosen_addr.empty())//debug
+				{
+					for (auto i = 1; i <= 10; i++)
+					{
+						chosen_addr.insert({ i * 8, SCAN_BOOL });
+					}
+				}*/
+				if (ImGui::BeginTable("Address List", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersV | ImGuiTableFlags_BordersH | ImGuiTableFlags_ScrollY))
+				{
+					ImGui::TableSetupColumn("Name");
+					ImGui::TableSetupColumn("Offset");
+					ImGui::TableSetupColumn("Address");
+					ImGui::TableSetupColumn("Type");
+					ImGui::TableSetupColumn("Value");
+					ImGui::TableSetupScrollFreeze(0, 1);
+					ImGui::TableHeadersRow();
+					{
+						static set <const Scan_Item*> selection;
+						for (auto& item : chosen_addr)
+						{
+							const bool selected = selection.contains(&item);
+
+							ImGui::TableNextRow();
+
+							if (ImGui::TableSetColumnIndex(0))
+							{
+								if (ImGui::Selectable(item.Name.c_str(), selected, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowItemOverlap))
+								{
+									if (ImGui::GetIO().KeyCtrl)
+									{
+										if (selected)
+										{
+											selection.erase(&item);
+										}
+										else
+										{
+											selection.insert(&item);
+										}
+									}
+									else
+									{
+										selection.clear();
+										selection.insert(&item);
+									}
+								}
+							}
+
+							if (ImGui::TableSetColumnIndex(1))
+							{
+								ImGui::Text("%d", item.Offset);
+							}
+
+							if (ImGui::TableSetColumnIndex(2))
+							{
+								ImGui::Text("%08llX", GTA5.get_global_addr(item.Offset));
+							}
+
+							if (ImGui::TableSetColumnIndex(3))
+							{
+								ImGui::Text("%s", to_string(item.Type).c_str());
+							}
+
+							if (ImGui::TableSetColumnIndex(4))
+							{
+								switch (item.Type)
+								{
+									case SCAN_BOOL:
+									{
+										ImGui::Text(GTA5.get_global <bool>(item.Offset) ? "True" : "False");
+										break;
+									}
+									case SCAN_FLOAT:
+									{
+										ImGui::Text("%f", static_cast <double>(GTA5.get_global <float>(item.Offset)));
+										break;
+									}
+									case SCAN_INT:
+									{
+										ImGui::Text("%d", GTA5.get_global <int>(item.Offset));
+										break;
+									}
+									case SCAN_UINT:
+									{
+										ImGui::Text("%u", GTA5.get_global <UINT>(item.Offset));
+										break;
+									}
+									case SCAN_STRING:
+									{
+										//TODO
+										//ImGui::Text("%s", GTA5.get_global <string>(item.Offset).c_str());
+										break;
+									}
+									case SCAN_NUMBER:
+									case SCAN_NONE: ;
+								}
+							}
+						}
+					}
+					ImGui::EndTable();
+				}
+			}
+		}
+		ImGui::EndChild();
 	}
 	ImGui::End();
+}
+
+string to_string(const Scan_Type type)
+{
+	switch (type)
+	{
+		case SCAN_BOOL:
+		{
+			return "Bool";
+		}
+		case SCAN_FLOAT:
+		{
+			return "Float";
+		}
+		case SCAN_INT:
+		{
+			return "Int";
+		}
+		case SCAN_UINT:
+		{
+			return "UInt";
+		}
+		case SCAN_STRING:
+		{
+			return "String";
+		}
+		case SCAN_NUMBER:
+		{
+			return "Number";
+		}
+		case SCAN_NONE:
+		{
+			return "None";
+		}
+	}
+	return "Unknown";
+}
+
+template <typename T, Scan_Type ST> void ScanGlobalLocal(set <Scan_Result>& s, T value)
+{
+	if (s.empty()) {}
+	else
+	{
+		for (auto& [addr, scan_type] : s)
+		{
+			if (scan_type == ST)
+			{
+				if (equal(GTA5.get_global <T>(addr), value))
+				{
+					s.erase({ addr, scan_type });
+				}
+			}
+		}
+	}
+}
+
+template <> void ScanGlobalLocal <string_view, SCAN_STRING>(set <Scan_Result>& s, const string_view value)
+{
+	if (s.empty())
+	{
+		//TODO
+		(void) s;
+	}
+	else
+	{
+		// for (auto& [addr, scan_type] : s)
+		// {
+		// 	if (scan_type == SCAN_STRING)
+		// 	{
+		// 		if (GTA5.get_global <string>(addr) != value)
+		// 		{
+		// 			s.erase({ addr, scan_type });
+		// 		}
+		// 	}
+		// }
+	}
+}
+
+void ScanGlobalLocal(set <Scan_Result>& s, const int scan_type, const Scan_Value& value)
+{
+	if (scan_type & SCAN_BOOL)
+	{
+		ScanGlobalLocal <bool, SCAN_BOOL>(s, value.bool_value);
+	}
+	else if (scan_type & SCAN_STRING)
+	{
+		ScanGlobalLocal <string_view, SCAN_STRING>(s, value.str_value);
+	}
+	else
+	{
+		if (scan_type & SCAN_FLOAT)
+		{
+			ScanGlobalLocal <float, SCAN_FLOAT>(s, value.float_value);
+		}
+		if (scan_type & SCAN_INT)
+		{
+			ScanGlobalLocal <int, SCAN_INT>(s, value.int_value);
+		}
+		if (scan_type & SCAN_UINT)
+		{
+			ScanGlobalLocal <UINT, SCAN_UINT>(s, value.uint_value);
+		}
+	}
 }
