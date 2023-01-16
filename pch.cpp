@@ -2,7 +2,7 @@
 
 namespace BF
 {
-	UINT8 to_hex(const char c)
+	uint8_t to_hex(const char c)
 	{
 		if ('0' <= c && c <= '9' || 'A' <= c && c <= 'F')
 		{
@@ -11,48 +11,88 @@ namespace BF
 		return 0;
 	}
 
-	void AllocCon()
+	void alloc_console()
 	{
 		AllocConsole();
 		FILE* stream;
-		freopen_s(&stream, "CON", "r", stdin);		// NOLINT(cert-err33-c)
-		freopen_s(&stream, "CON", "w", stdout);		// NOLINT(cert-err33-c)
-		freopen_s(&stream, "CON", "w", stderr);		// NOLINT(cert-err33-c)
+		if (freopen_s(&stream, "CON", "r", stdin) || freopen_s(&stream, "CON", "w", stdout) || freopen_s(&stream, "CON", "w", stderr))
+		{
+			MessageBox(nullptr, L"打开控制台失败", overlay_title.data(),MB_OK);
+			throw std::exception("打开控制台失败");
+		}
 		if (const auto consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE); consoleHandle)
 		{
 			SetConsoleCP(CP_UTF8);
 			SetConsoleOutputCP(CP_UTF8);
 
-			DWORD consoleMode;
-			GetConsoleMode(consoleHandle, &consoleMode);
+			SetConsoleTitle(overlay_title.data());
 
-			consoleMode = consoleMode | ENABLE_VIRTUAL_TERMINAL_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN;
-			consoleMode = consoleMode & ~ENABLE_QUICK_EDIT_MODE;
+			DWORD console_mode;
+			GetConsoleMode(consoleHandle, &console_mode);
 
-			SetConsoleMode(consoleHandle, consoleMode);
+			console_mode = console_mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN;
+			console_mode = console_mode & ~ENABLE_QUICK_EDIT_MODE;
+
+			SetConsoleMode(consoleHandle, console_mode);
 		}
 	}
 
-	void ClearConsole()
+	void clear_console()
 	{
-		const HANDLE               hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+		const HANDLE               console = GetStdHandle(STD_OUTPUT_HANDLE);
 		CONSOLE_SCREEN_BUFFER_INFO csbi;
 
-		if (!GetConsoleScreenBufferInfo(hConsole, &csbi))
+		if (!GetConsoleScreenBufferInfo(console, &csbi))
 		{
 			return;
 		}
 
-		const SMALL_RECT scrollRect { 0, 0, csbi.dwSize.X, csbi.dwSize.Y };
-		const COORD      scrollTarget { 0, static_cast <short>(-csbi.dwSize.Y) };
-		const CHAR_INFO  fill { ' ', csbi.wAttributes };
+		const SMALL_RECT rect { 0, 0, csbi.dwSize.X, csbi.dwSize.Y };
+		const COORD      scroll { 0, static_cast <short>(-csbi.dwSize.Y) };
+		const CHAR_INFO  fill { { ' ' }, csbi.wAttributes };
 
-		ScrollConsoleScreenBuffer(hConsole, &scrollRect, nullptr, scrollTarget, &fill);
+		ScrollConsoleScreenBuffer(console, &rect, nullptr, scroll, &fill);
 
 		csbi.dwCursorPosition.X = 0;
 		csbi.dwCursorPosition.Y = 0;
 
-		SetConsoleCursorPosition(hConsole, csbi.dwCursorPosition);
+		SetConsoleCursorPosition(console, csbi.dwCursorPosition);
+	}
+
+	std::string to_string(const scan_type type)
+	{
+		switch (type)
+		{
+			case SCAN_BOOL:
+			{
+				return "Bool";
+			}
+			case SCAN_FLOAT:
+			{
+				return "Float";
+			}
+			case SCAN_INT:
+			{
+				return "Int";
+			}
+			case SCAN_UINT:
+			{
+				return "UInt";
+			}
+			case SCAN_STRING:
+			{
+				return "String";
+			}
+			case SCAN_NUMBER:
+			{
+				return "Number";
+			}
+			case SCAN_NONE:
+			{
+				return "None";
+			}
+		}
+		return "Unknown";
 	}
 }
 

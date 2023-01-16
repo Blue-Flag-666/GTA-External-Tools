@@ -1,13 +1,12 @@
 #include "pch.hpp"
 #include "GTA External Tools.hpp"
-
 #include "Memory.hpp"
+
+using namespace BF;
 
 // 全局变量:
 HINSTANCE hInst;                    // 当前实例
 HWND      OverlayHWND;
-
-auto show_main_window = true, no_kill = true, done = false;
 
 int APIENTRY wWinMain(_In_ const HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ const LPWSTR lpCmdLine, _In_ const int nShowCmd)
 {
@@ -22,7 +21,7 @@ int APIENTRY wWinMain(_In_ const HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevIn
 
 	if (GTA5.is_empty() || !GTA5.is_running())
 	{
-		MessageBox(nullptr, L"未找到 GTA5 进程", L"GTA External Tools",MB_OK);
+		MessageBox(nullptr, L"未找到 GTA5 进程", overlay_title.data(),MB_OK);
 		return 0;
 	}
 
@@ -40,6 +39,8 @@ int APIENTRY wWinMain(_In_ const HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevIn
 	ImGui::GetIO().ConfigFlags = ImGui::GetIO().ConfigFlags | ImGuiConfigFlags_NavEnableKeyboard;
 
 	ApplyStyle();
+
+	static auto show_main_window = true, no_kill = true, done = false;
 
 	while (!done)
 	{
@@ -63,16 +64,16 @@ int APIENTRY wWinMain(_In_ const HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevIn
 		ImGui_ImplWin32_NewFrame();
 		ImGui::NewFrame();
 
-		InitWindow();
+		InitWindow(show_main_window, no_kill);
 
 		ImGui::Render();
 
 		constexpr float clear_color_with_alpha[4] = { 0, 0, 0, 0 };
-		g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, nullptr);
-		g_pd3dDeviceContext->ClearRenderTargetView(g_mainRenderTargetView, clear_color_with_alpha);
+		d3d_device_context->OMSetRenderTargets(1, &d3d_main_render_target_view, nullptr);
+		d3d_device_context->ClearRenderTargetView(d3d_main_render_target_view, clear_color_with_alpha);
 		ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
-		g_pSwapChain->Present(1, NULL);
+		d3d_swap_chain->Present(1, NULL);
 	}
 
 	ImGui_ImplDX11_Shutdown();
@@ -81,7 +82,7 @@ int APIENTRY wWinMain(_In_ const HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevIn
 
 	CleanupDeviceD3D();
 	DestroyWindow(OverlayHWND);
-	UnregisterClassW(OverlayTitle.data(), hInstance);
+	UnregisterClassW(overlay_title.data(), hInstance);
 
 	return 0;
 }
@@ -93,7 +94,7 @@ int APIENTRY wWinMain(_In_ const HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevIn
 //
 ATOM MyRegisterClass(const HINSTANCE hInstance)
 {
-	const WNDCLASSEXW wcex { sizeof(WNDCLASSEXW),CS_HREDRAW | CS_VREDRAW, WndProc, NULL, NULL, hInstance,LoadIcon(hInstance, MAKEINTRESOURCE(IDI_GTAEXTERNALTOOLS)),LoadCursor(nullptr,IDC_ARROW), CreateSolidBrush(RGB(0, 0, 0)), OverlayTitle.data(), OverlayTitle.data(), nullptr };
+	const WNDCLASSEXW wcex { sizeof(WNDCLASSEXW),CS_HREDRAW | CS_VREDRAW, WndProc, NULL, NULL, hInstance,LoadIcon(hInstance, MAKEINTRESOURCE(IDI_GTAEXTERNALTOOLS)),LoadCursor(nullptr,IDC_ARROW), CreateSolidBrush(RGB(0, 0, 0)), overlay_title.data(), overlay_title.data(), nullptr };
 
 	return RegisterClassExW(&wcex);
 }
@@ -112,12 +113,12 @@ BOOL InitInstance(const HINSTANCE hInstance, const int nCmdShow)
 {
 	hInst = hInstance; // 将实例句柄存储在全局变量中
 
-	OverlayHWND = CreateWindowExW(WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_TOOLWINDOW, OverlayTitle.data(), OverlayTitle.data(), WS_POPUP, 0, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
+	OverlayHWND = CreateWindowExW(WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_TOOLWINDOW, overlay_title.data(), overlay_title.data(), WS_POPUP, 0, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
 
 	if (!CreateDeviceD3D(OverlayHWND))
 	{
 		CleanupDeviceD3D();
-		UnregisterClassW(OverlayTitle.data(), hInstance);
+		UnregisterClassW(overlay_title.data(), hInstance);
 		return FALSE;
 	}
 
@@ -130,7 +131,7 @@ BOOL InitInstance(const HINSTANCE hInstance, const int nCmdShow)
 }
 
 //
-//  函数: WndProc(HWND, UINT, WPARAM, LPARAM)
+//  函数: WndProc(HWND, uint32_t, WPARAM, LPARAM)
 //
 //  目标: 处理主窗口的消息。
 //
@@ -139,7 +140,7 @@ BOOL InitInstance(const HINSTANCE hInstance, const int nCmdShow)
 //  WM_DESTROY  - 发送退出消息并返回
 //
 //
-LRESULT CALLBACK WndProc(const HWND hWnd, const UINT msg, const WPARAM wParam, const LPARAM lParam)
+LRESULT CALLBACK WndProc(const HWND hWnd, const uint32_t msg, const WPARAM wParam, const LPARAM lParam)
 {
 	if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam))
 	{
@@ -149,10 +150,10 @@ LRESULT CALLBACK WndProc(const HWND hWnd, const UINT msg, const WPARAM wParam, c
 	{
 		case WM_SIZE:
 		{
-			if (g_pd3dDevice != nullptr && wParam != SIZE_MINIMIZED)
+			if (d3d_device != nullptr && wParam != SIZE_MINIMIZED)
 			{
 				CleanupRenderTarget();
-				g_pSwapChain->ResizeBuffers(0, LOWORD(lParam), HIWORD(lParam), DXGI_FORMAT_UNKNOWN, NULL);
+				d3d_swap_chain->ResizeBuffers(0, LOWORD(lParam), HIWORD(lParam), DXGI_FORMAT_UNKNOWN, NULL);
 				CreateRenderTarget();
 			}
 			return 0;
@@ -183,7 +184,7 @@ bool CreateDeviceD3D(const HWND hWnd)
 	const DXGI_SWAP_CHAIN_DESC sd = { { 0, 0, { 60, 1 }, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED, DXGI_MODE_SCALING_UNSPECIFIED }, { 1, 0 },DXGI_USAGE_RENDER_TARGET_OUTPUT, 2, hWnd,TRUE, DXGI_SWAP_EFFECT_DISCARD, DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH };
 
 	D3D_FEATURE_LEVEL featureLevel;
-	if (constexpr D3D_FEATURE_LEVEL featureLevelArray[2] = { D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_0, }; D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, NULL, featureLevelArray, 2, D3D11_SDK_VERSION, &sd, &g_pSwapChain, &g_pd3dDevice, &featureLevel, &g_pd3dDeviceContext) != S_OK)
+	if (constexpr D3D_FEATURE_LEVEL featureLevelArray[2] = { D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_0, }; D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, NULL, featureLevelArray, 2, D3D11_SDK_VERSION, &sd, &d3d_swap_chain, &d3d_device, &featureLevel, &d3d_device_context) != S_OK)
 	{
 		return false;
 	}
@@ -195,51 +196,55 @@ bool CreateDeviceD3D(const HWND hWnd)
 void CleanupDeviceD3D()
 {
 	CleanupRenderTarget();
-	if (g_pSwapChain)
+	if (d3d_swap_chain)
 	{
-		g_pSwapChain->Release();
-		g_pSwapChain = nullptr;
+		d3d_swap_chain->Release();
+		d3d_swap_chain = nullptr;
 	}
-	if (g_pd3dDeviceContext)
+	if (d3d_device_context)
 	{
-		g_pd3dDeviceContext->Release();
-		g_pd3dDeviceContext = nullptr;
+		d3d_device_context->Release();
+		d3d_device_context = nullptr;
 	}
-	if (g_pd3dDevice)
+	if (d3d_device)
 	{
-		g_pd3dDevice->Release();
-		g_pd3dDevice = nullptr;
+		d3d_device->Release();
+		d3d_device = nullptr;
 	}
 }
 
 void CreateRenderTarget()
 {
 	ID3D11Texture2D* pBackBuffer;
-	g_pSwapChain->GetBuffer(NULL, IID_PPV_ARGS(&pBackBuffer));
-	assert(pBackBuffer);
-	g_pd3dDevice->CreateRenderTargetView(pBackBuffer, nullptr, &g_mainRenderTargetView);
+	d3d_swap_chain->GetBuffer(NULL, IID_PPV_ARGS(&pBackBuffer));
+	if (!pBackBuffer)
+	{
+		MessageBox(nullptr, L"Get D3D11 Buffer Failed", L"Error",MB_OK);
+		throw std::exception("Get D3D11 Buffer Failed");
+	}
+	d3d_device->CreateRenderTargetView(pBackBuffer, nullptr, &d3d_main_render_target_view);
 	pBackBuffer->Release();
 }
 
 void CleanupRenderTarget()
 {
-	if (g_mainRenderTargetView)
+	if (d3d_main_render_target_view)
 	{
-		g_mainRenderTargetView->Release();
-		g_mainRenderTargetView = nullptr;
+		d3d_main_render_target_view->Release();
+		d3d_main_render_target_view = nullptr;
 	}
 }
 
 void ParseCmdLine(const LPWSTR lpCmdLine)
 {
-	auto                        cnt       = 0;
-	const LPWSTR*               szArgList = CommandLineToArgvW(lpCmdLine, &cnt);
-	const vector <wstring_view> args(szArgList, szArgList + cnt);
+	auto                                  cnt       = 0;
+	const LPWSTR*                         szArgList = CommandLineToArgvW(lpCmdLine, &cnt);
+	const std::vector <std::wstring_view> args(szArgList, szArgList + cnt);
 
-	for (const auto& [arg_str, func] : initializer_list <pair <wstring_view, function <void()>>> {
-			 make_pair(L"--skip-memory-init", []
+	for (const auto& [arg_str, func] : std::initializer_list <std::pair <std::wstring_view, std::function <void()>>> {
+			 std::make_pair(L"--skip-memory-init", []
 			 {
-				 MessageBox(nullptr, L"Memory Init Skipped", OverlayTitle.data(), MB_OK);
+				 MessageBox(nullptr, L"Memory Init Skipped", overlay_title.data(), MB_OK);
 				 skip_memory_init = true;
 			 })
 		 })
@@ -264,9 +269,9 @@ void ApplyStyle()
 	ImGui::GetStyle().ScaleAllSizes(dpi);
 
 	ImGui_ImplWin32_Init(OverlayHWND);
-	ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
+	ImGui_ImplDX11_Init(d3d_device, d3d_device_context);
 
-	if (constexpr string_view filename = R"(C:\Windows\Fonts\segoeui.ttf)"; filesystem::exists(filename))
+	if (constexpr std::string_view filename = R"(C:\Windows\Fonts\segoeui.ttf)"; std::filesystem::exists(filename))
 	{
 		const ImFontConfig config;
 		ImGui::GetIO().Fonts->AddFontFromFileTTF(filename.data(), round(18.0f * dpi), &config, ImGui::GetIO().Fonts->GetGlyphRangesChineseSimplifiedCommon());
@@ -277,7 +282,7 @@ void ApplyStyle()
 	}
 }
 
-void InitWindow()
+void InitWindow(bool& show_main_window, bool& no_kill)
 {
 	if (ImGui::IsKeyPressed(ImGuiKey_Insert, false))
 	{
@@ -286,13 +291,13 @@ void InitWindow()
 	if (show_main_window)
 	{
 		WINDOWINFO info = {};
-		GetWindowInfo(FindWindowA("grcWindow", nullptr), &info);
+		GetWindowInfo(Memory::find_window_hwnd(), &info);
 		MoveWindow(OverlayHWND, info.rcClient.left, info.rcClient.top, info.rcClient.right - info.rcClient.left, info.rcClient.bottom - info.rcClient.top, TRUE);
-		MainWindow();
+		MainWindow(no_kill);
 	}
 }
 
-void MainWindow()
+void MainWindow(bool& no_kill)
 {
 	ImGui::ShowDemoWindow();
 
@@ -336,9 +341,9 @@ void GlobalLocalScanner(bool& show, bool& first)
 			ImGui::SetWindowSize(ImVec2(570, 0));
 			first = false;
 		}
-		static vector <Scan_Item> list_addr;
-		static auto               begin          = 1,   end         = 5000000;
-		static float              scanner_height = 220, list_height = 200;
+		static std::vector <scan_item> list_addr;
+		static auto                    begin          = 1,   end         = 5000000;
+		static float                   scanner_height = 220, list_height = 200;
 
 		if (static float last_height = 420; !equal(last_height, ImGui::GetContentRegionAvail().y))
 		{
@@ -353,9 +358,9 @@ void GlobalLocalScanner(bool& show, bool& first)
 
 		ImGui::BeginChild("Scanner", ImVec2(0, scanner_height), false, ImGuiWindowFlags_AlwaysAutoResize);
 		{
-			static set <Scan_Result>        scan_addr;
-			static set <const Scan_Result*> selection;
-			static float                    option_width = 270, result_width = 270;
+			static std::set <scan_result>        scan_addr;
+			static std::set <const scan_result*> selection;
+			static float                         option_width = 270, result_width = 270;
 
 			if (static float last_width = 540; !equal(last_width, ImGui::GetContentRegionAvail().x))
 			{
@@ -370,7 +375,7 @@ void GlobalLocalScanner(bool& show, bool& first)
 
 			ImGui::BeginChild("Scan Option", ImVec2(option_width, 0));
 			{
-				static Scan_Value value;
+				static scan_value value;
 				static int        scan_type = SCAN_INT;
 				if (ImGui::Button("First Scan"))
 				{
@@ -431,7 +436,7 @@ void GlobalLocalScanner(bool& show, bool& first)
 
 				if (scan_type & SCAN_BOOL)
 				{
-					value          = Scan_Value(value.bool_value);
+					value          = scan_value(value.bool_value);
 					int bool_value = value.bool_value;
 					ImGui::RadioButton("True", &bool_value, true);
 					ImGui::SameLine();
@@ -456,19 +461,19 @@ void GlobalLocalScanner(bool& show, bool& first)
 					{
 						auto x = static_cast <double>(value.float_value);
 						ImGui::InputDouble("Value", &x);
-						value = Scan_Value(x);
+						value = scan_value(x);
 					}
 					else if (scan_type & SCAN_UINT)
 					{
-						UINT x = value.uint_value;
+						uint32_t x = value.uint_value;
 						ImGui::InputScalar("Value", ImGuiDataType_U32, &x);
-						value = Scan_Value(x);
+						value = scan_value(x);
 					}
 					else
 					{
 						int x = value.int_value;
 						ImGui::InputInt("Value", &x, 0);
-						value = Scan_Value(x);
+						value = scan_value(x);
 					}
 				}
 
@@ -482,7 +487,7 @@ void GlobalLocalScanner(bool& show, bool& first)
 				{
 					for (const auto x : selection)
 					{
-						list_addr.emplace_back(x->Offset, x->Type);
+						list_addr.emplace_back(x->offset, x->type);
 					}
 				}
 			}
@@ -498,6 +503,7 @@ void GlobalLocalScanner(bool& show, bool& first)
 						scan_addr.insert({ i * 8, SCAN_BOOL });
 					}
 				}*/
+
 				if (ImGui::BeginTable("Result Table", 4, (result_width < 320 ? ImGuiTableFlags_SizingFixedFit : ImGuiTableFlags_None) | ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersV | ImGuiTableFlags_BordersH | ImGuiTableFlags_ScrollY))
 				{
 					ImGui::TableSetupColumn("Offset");
@@ -515,7 +521,7 @@ void GlobalLocalScanner(bool& show, bool& first)
 
 							if (ImGui::TableSetColumnIndex(0))
 							{
-								if (ImGui::Selectable(std::to_string(item->Offset).c_str(), selected, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowItemOverlap | ImGuiSelectableFlags_AllowDoubleClick))
+								if (ImGui::Selectable(std::to_string(item->offset).c_str(), selected, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowItemOverlap | ImGuiSelectableFlags_AllowDoubleClick))
 								{
 									static auto last_click = &*item;
 									if (ImGui::GetIO().KeyCtrl)
@@ -557,7 +563,7 @@ void GlobalLocalScanner(bool& show, bool& first)
 									{
 										for (const auto x : selection)
 										{
-											list_addr.emplace_back(x->Offset, x->Type);
+											list_addr.emplace_back(x->offset, x->type);
 										}
 										selection.clear();
 									}
@@ -576,36 +582,36 @@ void GlobalLocalScanner(bool& show, bool& first)
 
 							if (ImGui::TableSetColumnIndex(1))
 							{
-								ImGui::Text("%08llX", GTA5.get_global_addr(item->Offset));
+								ImGui::Text("%08llX", GTA5.get_global_addr(item->offset));
 							}
 
 							if (ImGui::TableSetColumnIndex(2))
 							{
-								switch (item->Type)
+								switch (item->type)
 								{
 									case SCAN_BOOL:
 									{
-										ImGui::Text(GTA5.get_global <bool>(item->Offset) ? "True" : "False");
+										ImGui::Text(GTA5.get_global <bool>(item->offset) ? "True" : "False");
 										break;
 									}
 									case SCAN_FLOAT:
 									{
-										ImGui::Text("%f", static_cast <double>(GTA5.get_global <float>(item->Offset)));
+										ImGui::Text("%f", static_cast <double>(GTA5.get_global <float>(item->offset)));
 										break;
 									}
 									case SCAN_INT:
 									{
-										ImGui::Text("%d", GTA5.get_global <int>(item->Offset));
+										ImGui::Text("%d", GTA5.get_global <int>(item->offset));
 										break;
 									}
 									case SCAN_UINT:
 									{
-										ImGui::Text("%u", GTA5.get_global <UINT>(item->Offset));
+										ImGui::Text("%u", GTA5.get_global <uint32_t>(item->offset));
 										break;
 									}
 									case SCAN_STRING:
 									{
-										ImGui::Text("%s", GTA5.get_global <const char*>(item->Offset));
+										ImGui::Text("%s", GTA5.get_global <const char*>(item->offset));
 										break;
 									}
 									case SCAN_NUMBER:
@@ -615,31 +621,31 @@ void GlobalLocalScanner(bool& show, bool& first)
 
 							if (ImGui::TableSetColumnIndex(3))
 							{
-								switch (item->Type)
+								switch (item->type)
 								{
 									case SCAN_BOOL:
 									{
-										ImGui::Text(item->PrevValue.bool_value ? "True" : "False");
+										ImGui::Text(item->previous_value.bool_value ? "True" : "False");
 										break;
 									}
 									case SCAN_FLOAT:
 									{
-										ImGui::Text("%f", static_cast <double>(item->PrevValue.float_value));
+										ImGui::Text("%f", static_cast <double>(item->previous_value.float_value));
 										break;
 									}
 									case SCAN_INT:
 									{
-										ImGui::Text("%d", item->PrevValue.int_value);
+										ImGui::Text("%d", item->previous_value.int_value);
 										break;
 									}
 									case SCAN_UINT:
 									{
-										ImGui::Text("%u", item->PrevValue.uint_value);
+										ImGui::Text("%u", item->previous_value.uint_value);
 										break;
 									}
 									case SCAN_STRING:
 									{
-										ImGui::Text("%s", item->PrevValue.string_value);
+										ImGui::Text("%s", item->previous_value.string_value);
 										break;
 									}
 									case SCAN_NUMBER:
@@ -658,13 +664,13 @@ void GlobalLocalScanner(bool& show, bool& first)
 		ImGui::Spacing();
 		ImGui::BeginChild("Address List", ImVec2(0, list_height));
 		{
-			if (list_addr.empty())//debug
+			/*if (list_addr.empty())//debug
 			{
 				for (auto i = 1; i <= 5; i++)
 				{
 					list_addr.emplace_back(i * 8, SCAN_BOOL);
 				}
-			}
+			}*/
 
 			if (ImGui::BeginTable("Address List", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersV | ImGuiTableFlags_BordersH | ImGuiTableFlags_ScrollY))
 			{
@@ -676,7 +682,7 @@ void GlobalLocalScanner(bool& show, bool& first)
 				ImGui::TableSetupScrollFreeze(0, 1);
 				ImGui::TableHeadersRow();
 				{
-					static set <size_t> selection;
+					static std::set <size_t> selection;
 					for (size_t i = 0; i < list_addr.size(); i++)
 					{
 						const auto item     = list_addr.begin() + static_cast <ptrdiff_t>(i);
@@ -687,7 +693,7 @@ void GlobalLocalScanner(bool& show, bool& first)
 						if (ImGui::TableSetColumnIndex(0))
 						{
 							static auto popup_opened = static_cast <size_t>(-1);
-							if (ImGui::Selectable(item->Name, selected, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowItemOverlap | ImGuiSelectableFlags_AllowDoubleClick))
+							if (ImGui::Selectable(item->name, selected, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowItemOverlap | ImGuiSelectableFlags_AllowDoubleClick))
 							{
 								static auto last_click = i;
 								if (ImGui::GetIO().KeyCtrl)
@@ -708,7 +714,7 @@ void GlobalLocalScanner(bool& show, bool& first)
 										auto left = &last_click, right = &i;
 										if (*right < *left)
 										{
-											swap(left, right);
+											std::swap(left, right);
 										}
 										for (auto j = *left; j <= *right; j++)
 										{
@@ -725,7 +731,7 @@ void GlobalLocalScanner(bool& show, bool& first)
 
 								if (ImGui::IsMouseDoubleClicked(0))
 								{
-									popup_opened = true;
+									popup_opened = i;
 								}
 							}
 
@@ -733,39 +739,39 @@ void GlobalLocalScanner(bool& show, bool& first)
 							{
 								const auto window = ImGui::GetCurrentWindow()->ParentWindow->ParentWindow;
 								ImGui::SetNextWindowPos(window->Pos + window->Size / 2, ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.5f));
-								if (ImGui::Begin(("Edit Item##" + to_string(i)).c_str(), &opened, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize))
+								if (ImGui::Begin(("Edit Item##" + std::to_string(i)).c_str(), &opened, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize))
 								{
-									static Scan_Item  unsaved = *item;
-									static Scan_Value unsaved_value;
+									static scan_item  unsaved = *item;
+									static scan_value unsaved_value;
 									static auto       new_unsaved = true;
 									if (new_unsaved)
 									{
 										unsaved = *item;
-										switch (item->Type)
+										switch (item->type)
 										{
 											case SCAN_BOOL:
 											{
-												unsaved_value = Scan_Value(GTA5.get_global <bool>(item->Offset));
+												unsaved_value = scan_value(GTA5.get_global <bool>(item->offset));
 												break;
 											}
 											case SCAN_FLOAT:
 											{
-												unsaved_value = Scan_Value(GTA5.get_global <float>(item->Offset));
+												unsaved_value = scan_value(GTA5.get_global <float>(item->offset));
 												break;
 											}
 											case SCAN_INT:
 											{
-												unsaved_value = Scan_Value(GTA5.get_global <int>(item->Offset));
+												unsaved_value = scan_value(GTA5.get_global <int>(item->offset));
 												break;
 											}
 											case SCAN_UINT:
 											{
-												unsaved_value = Scan_Value(GTA5.get_global <UINT>(item->Offset));
+												unsaved_value = scan_value(GTA5.get_global <uint32_t>(item->offset));
 												break;
 											}
 											case SCAN_STRING:
 											{
-												unsaved_value = Scan_Value(GTA5.get_global <const char*>(item->Offset));
+												unsaved_value = scan_value(GTA5.get_global <const char*>(item->offset));
 												break;
 											}
 											case SCAN_NUMBER:
@@ -776,24 +782,30 @@ void GlobalLocalScanner(bool& show, bool& first)
 
 									ImGui::Text("Name");
 									{
-										ImGui::InputText("Name", unsaved.Name, MAX_NAME_LEN);
+										ImGui::InputText("Name", unsaved.name, MAX_NAME_LEN);
+										ImGui::SameLine();
+										ImGui::Text("Length: %lld", std::strlen(unsaved.name));
+										if (std::strlen(unsaved.name) == MAX_NAME_LEN - 1)
+										{
+											ImGui::Text("Warning: Max name length reached. (%d)", MAX_NAME_LEN - 1);
+										}
 									}
 
 									ImGui::Text("Type");
 									{
 										const char* items[]  = { "Bool", "Float", "Int", "UInt", "String" };
 										auto        cur_item = -1;
-										for (int x = unsaved.Type; x; cur_item++)
+										for (int x = unsaved.type; x; cur_item++)
 										{
 											x = x >> 1;
 										}
 										ImGui::Combo("Type", &cur_item, items,IM_ARRAYSIZE(items));
-										unsaved.Type = static_cast <Scan_Type>(1 << cur_item);
+										unsaved.type = static_cast <scan_type>(1 << cur_item);
 									}
 
 									ImGui::Text("Value");
 									{
-										switch (unsaved.Type)
+										switch (unsaved.type)
 										{
 											case SCAN_BOOL:
 											{
@@ -808,27 +820,26 @@ void GlobalLocalScanner(bool& show, bool& first)
 											{
 												auto x = static_cast <double>(unsaved_value.float_value);
 												ImGui::InputDouble("Value", &x);
-												unsaved_value = Scan_Value(x);
+												unsaved_value = scan_value(x);
 												break;
 											}
 											case SCAN_INT:
 											{
 												int x = unsaved_value.int_value;
 												ImGui::InputInt("Value", &x, 0);
-												unsaved_value = Scan_Value(x);
+												unsaved_value = scan_value(x);
 												break;
 											}
 											case SCAN_UINT:
 											{
-												UINT x = unsaved_value.uint_value;
+												uint32_t x = unsaved_value.uint_value;
 												ImGui::InputScalar("Value", ImGuiDataType_U32, &x);
-												unsaved_value = Scan_Value(x);
+												unsaved_value = scan_value(x);
 												break;
 											}
 											case SCAN_STRING:
 											{
 												unsaved_value.reset(unsaved_value.string_value);
-												ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize("Value").x - ImGui::CalcTextSize(("Length: " + std::to_string(strlen(unsaved_value.string_value))).c_str()).x - ImGui::GetStyle().ItemSpacing.x * 2 - 3);
 												ImGui::InputText("Value", unsaved_value.string_value, MAX_STR_LEN);
 												ImGui::SameLine();
 												ImGui::Text("Length: %lld", strlen(unsaved_value.string_value));
@@ -847,31 +858,31 @@ void GlobalLocalScanner(bool& show, bool& first)
 									if (ImGui::Button("OK", ImVec2(120, 0)))
 									{
 										*item = unsaved;
-										switch (item->Type)
+										switch (item->type)
 										{
 											case SCAN_BOOL:
 											{
-												GTA5.set_global <bool>(item->Offset, unsaved_value.bool_value);
+												GTA5.set_global <bool>(item->offset, unsaved_value.bool_value);
 												break;
 											}
 											case SCAN_FLOAT:
 											{
-												GTA5.set_global <float>(item->Offset, unsaved_value.float_value);
+												GTA5.set_global <float>(item->offset, unsaved_value.float_value);
 												break;
 											}
 											case SCAN_INT:
 											{
-												GTA5.set_global <int>(item->Offset, unsaved_value.int_value);
+												GTA5.set_global <int>(item->offset, unsaved_value.int_value);
 												break;
 											}
 											case SCAN_UINT:
 											{
-												GTA5.set_global <UINT>(item->Offset, unsaved_value.uint_value);
+												GTA5.set_global <uint32_t>(item->offset, unsaved_value.uint_value);
 												break;
 											}
 											case SCAN_STRING:
 											{
-												strcpy_s(static_cast <char*>(LPVOID_t(GTA5.get_global_addr(item->Offset)).ptr), strlen(unsaved_value.string_value), unsaved_value.string_value);
+												strcpy_s(reinterpret_cast <char*>(GTA5.get_global_addr(item->offset)), strlen(unsaved_value.string_value), unsaved_value.string_value);
 												break;
 											}
 											case SCAN_NUMBER:
@@ -899,7 +910,7 @@ void GlobalLocalScanner(bool& show, bool& first)
 
 								if (popup_opened == static_cast <size_t>(-1) && ImGui::IsKeyPressed(ImGuiKey_Delete, false))
 								{
-									for (const auto it : reverse_view(selection))
+									for (const auto it : std::ranges::reverse_view(selection))
 									{
 										list_addr.erase(list_addr.begin() + static_cast <ptrdiff_t>(it));
 									}
@@ -911,46 +922,46 @@ void GlobalLocalScanner(bool& show, bool& first)
 
 						if (ImGui::TableSetColumnIndex(1))
 						{
-							ImGui::Text("%d", item->Offset);
+							ImGui::Text("%d", item->offset);
 						}
 
 						if (ImGui::TableSetColumnIndex(2))
 						{
-							ImGui::Text("%08llX", GTA5.get_global_addr(item->Offset));
+							ImGui::Text("%08llX", GTA5.get_global_addr(item->offset));
 						}
 
 						if (ImGui::TableSetColumnIndex(3))
 						{
-							ImGui::Text("%s", to_string(item->Type).c_str());
+							ImGui::Text("%s", to_string(item->type).c_str());
 						}
 
 						if (ImGui::TableSetColumnIndex(4))
 						{
-							switch (item->Type)
+							switch (item->type)
 							{
 								case SCAN_BOOL:
 								{
-									ImGui::Text(GTA5.get_global <bool>(item->Offset) ? "True" : "False");
+									ImGui::Text(GTA5.get_global <bool>(item->offset) ? "True" : "False");
 									break;
 								}
 								case SCAN_FLOAT:
 								{
-									ImGui::Text("%f", static_cast <double>(GTA5.get_global <float>(item->Offset)));
+									ImGui::Text("%f", static_cast <double>(GTA5.get_global <float>(item->offset)));
 									break;
 								}
 								case SCAN_INT:
 								{
-									ImGui::Text("%d", GTA5.get_global <int>(item->Offset));
+									ImGui::Text("%d", GTA5.get_global <int>(item->offset));
 									break;
 								}
 								case SCAN_UINT:
 								{
-									ImGui::Text("%u", GTA5.get_global <UINT>(item->Offset));
+									ImGui::Text("%u", GTA5.get_global <uint32_t>(item->offset));
 									break;
 								}
 								case SCAN_STRING:
 								{
-									ImGui::Text("%s", GTA5.get_global <const char*>(item->Offset));
+									ImGui::Text("%s", GTA5.get_global <const char*>(item->offset));
 									break;
 								}
 								case SCAN_NUMBER:
@@ -967,43 +978,7 @@ void GlobalLocalScanner(bool& show, bool& first)
 	ImGui::End();
 }
 
-string to_string(const Scan_Type type)
-{
-	switch (type)
-	{
-		case SCAN_BOOL:
-		{
-			return "Bool";
-		}
-		case SCAN_FLOAT:
-		{
-			return "Float";
-		}
-		case SCAN_INT:
-		{
-			return "Int";
-		}
-		case SCAN_UINT:
-		{
-			return "UInt";
-		}
-		case SCAN_STRING:
-		{
-			return "String";
-		}
-		case SCAN_NUMBER:
-		{
-			return "Number";
-		}
-		case SCAN_NONE:
-		{
-			return "None";
-		}
-	}
-	return "Unknown";
-}
-
-template <typename T, Scan_Type ST> void ScanGlobalLocal(set <Scan_Result>& s, T value)
+template <typename T, scan_type ST> void ScanGlobalLocal(std::set <scan_result>& s, T value)
 {
 	if (s.empty())
 	{
@@ -1013,9 +988,9 @@ template <typename T, Scan_Type ST> void ScanGlobalLocal(set <Scan_Result>& s, T
 	{
 		for (const auto& result : s)
 		{
-			if (result.Type == ST)
+			if (result.type == ST)
 			{
-				if (equal(GTA5.get_global <T>(result.Offset), value))
+				if (equal(GTA5.get_global <T>(result.offset), value))
 				{
 					s.erase(result);
 				}
@@ -1024,7 +999,7 @@ template <typename T, Scan_Type ST> void ScanGlobalLocal(set <Scan_Result>& s, T
 	}
 }
 
-template <> void ScanGlobalLocal <const char*, SCAN_STRING>(set <Scan_Result>& s, const char* value)
+template <> void ScanGlobalLocal <const char*, SCAN_STRING>(std::set <scan_result>& s, const char* value)
 {
 	if (s.empty())
 	{
@@ -1035,9 +1010,9 @@ template <> void ScanGlobalLocal <const char*, SCAN_STRING>(set <Scan_Result>& s
 	{
 		for (const auto& result : s)
 		{
-			if (result.Type == SCAN_STRING)
+			if (result.type == SCAN_STRING)
 			{
-				if (!strcmp(GTA5.get_global <const char*>(result.Offset), value))
+				if (!strcmp(GTA5.get_global <const char*>(result.offset), value))
 				{
 					s.erase(result);
 				}
@@ -1046,7 +1021,7 @@ template <> void ScanGlobalLocal <const char*, SCAN_STRING>(set <Scan_Result>& s
 	}
 }
 
-void ScanGlobalLocal(set <Scan_Result>& s, const int scan_type, const Scan_Value& value)
+void ScanGlobalLocal(std::set <scan_result>& s, const int scan_type, const scan_value& value)
 {
 	if (scan_type & SCAN_BOOL)
 	{
@@ -1068,7 +1043,7 @@ void ScanGlobalLocal(set <Scan_Result>& s, const int scan_type, const Scan_Value
 		}
 		if (scan_type & SCAN_UINT)
 		{
-			ScanGlobalLocal <UINT, SCAN_UINT>(s, value.uint_value);
+			ScanGlobalLocal <uint32_t, SCAN_UINT>(s, value.uint_value);
 		}
 	}
 }

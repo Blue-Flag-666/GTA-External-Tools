@@ -2,78 +2,62 @@
 
 #include "pch.hpp"
 
+using WNDINFO = struct ST_WNDINFO
+{
+	HWND  hWnd;
+	DWORD dwProcessId;
+};
+using LPWNDINFO = WNDINFO*;
+
+HWND GetProcessMainWnd(DWORD dwProcessId);
+
+BOOL ListSystemProcesses(WCHAR szExeFile[MAX_PATH], LPPROCESSENTRY32 PE32);
+
+BOOL ListProcessModules(uint32_t dwProcessId, const WCHAR szModule[MAX_MODULE_NAME32 + 1], LPMODULEENTRY32 ME32);
+
 namespace BF
 {
-	using WNDINFO = struct ST_WNDINFO
-	{
-		HWND  hWnd;
-		DWORD dwProcessId;
-	};
-	using LPWNDINFO = WNDINFO*;
-
-	union LPWNDINFO_t
-	{
-		LPWNDINFO info;
-		LPARAM    ptr;
-
-		explicit LPWNDINFO_t(const LPARAM p): ptr(p) {}
-	};
-
-	union LPVOID_t
-	{
-		DWORD_PTR val;
-		LPVOID    ptr;
-
-		explicit LPVOID_t(const DWORD_PTR val): val(val) {}
-	};
-
-	HWND GetProcessMainWnd(DWORD dwProcessId);
-
-	BOOL ListSystemProcesses(WCHAR szExeFile[MAX_PATH], LPPROCESSENTRY32 PE32);
-
-	BOOL ListProcessModules(UINT dwProcessId, const WCHAR szModule[MAX_MODULE_NAME32 + 1], LPMODULEENTRY32 ME32);
-
 	class Memory
 	{
-		wstring_view ProcessName;
-		UINT         ProcessID     = NULL;
-		HANDLE       ProcessHandle = nullptr;
-		HWND         ProcessHWND   = nullptr;
-		DWORD_PTR    BaseAddr      = NULL;
-		UINT         Size          = NULL;
+		std::wstring_view process_name;
+		uint32_t          process_id     = NULL;
+		HANDLE            process_handle = nullptr;
+		HWND              process_hwnd   = nullptr;
+		uintptr_t         base_address   = NULL;
+		uint32_t          process_size   = NULL;
 
 		struct Pointers
 		{
-			DWORD_PTR WorldPTR           = NULL;
-			DWORD_PTR BlipPTR            = NULL;
-			DWORD_PTR ReplayInterfacePTR = NULL;
-			DWORD_PTR LocalScriptsPTR    = NULL;
-			DWORD_PTR GlobalPTR          = NULL;
-			DWORD_PTR PlayerCountPTR     = NULL;
-			DWORD_PTR PickupDataPTR      = NULL;
-			DWORD_PTR WeatherADDR        = NULL;
-			DWORD_PTR SettingsPTRs       = NULL;
-			DWORD_PTR AimCPedPTR         = NULL;
-			DWORD_PTR FriendListPTR      = NULL;
-			DWORD_PTR ThermalADDR        = NULL;
-			DWORD_PTR NightVisionADDR    = NULL;
-			DWORD_PTR BlackoutADDR       = NULL;
+			uintptr_t WorldPTR           = NULL;
+			uintptr_t BlipPTR            = NULL;
+			uintptr_t ReplayInterfacePTR = NULL;
+			uintptr_t LocalScriptsPTR    = NULL;
+			uintptr_t GlobalPTR          = NULL;
+			uintptr_t PlayerCountPTR     = NULL;
+			uintptr_t PickupDataPTR      = NULL;
+			uintptr_t WeatherADDR        = NULL;
+			uintptr_t SettingsPTRs       = NULL;
+			uintptr_t AimCPedPTR         = NULL;
+			uintptr_t FriendListPTR      = NULL;
+			uintptr_t ThermalADDR        = NULL;
+			uintptr_t NightVisionADDR    = NULL;
+			uintptr_t BlackoutADDR       = NULL;
 
 			class Pattern
 			{
-				string_view name;
-				DWORD_PTR   address;
+				std::string_view name;
+				uintptr_t        address;
 
-				static DWORD_PTR AOBScan(string_view pattern);
+				static uintptr_t AOBScan(std::string_view pattern);
 
 				public:
 					[[nodiscard]] Pattern rip() const;
 
-					Pattern(const string_view name, const string_view pattern): name(name),
-																				address(AOBScan(pattern)) {}
+					Pattern(const std::string_view name, const std::string_view pattern): name(name),
+																						  address(AOBScan(pattern)) {}
 
-					Pattern(const string_view name, const DWORD_PTR address): name(name),
-																			  address(address) {}
+					Pattern(const std::string_view name, const uintptr_t address): name(name),
+																				   address(address) {}
 
 					[[nodiscard]] Pattern add(const size_t n) const
 					{
@@ -85,7 +69,7 @@ namespace BF
 						return { name, address - n };
 					}
 
-					[[nodiscard]] explicit operator DWORD_PTR() const
+					[[nodiscard]] explicit operator uintptr_t() const
 					{
 						return address;
 					}
@@ -113,9 +97,9 @@ namespace BF
 			Pointers pointers;
 
 			Memory() = default;
-			explicit Memory(wstring_view name);
+			explicit Memory(std::wstring_view name);
 
-			template <typename T> T read(DWORD_PTR BaseAddress, const vector <INT64>& offsets = {}) const
+			template <typename T> [[nodiscard]] T read(uintptr_t BaseAddress, const std::vector <int64_t>& offsets = {}) const
 			{
 				T ret = 0;
 				for (const auto offset : offsets)
@@ -124,14 +108,14 @@ namespace BF
 					{
 						return T();
 					}
-					read_memory <DWORD_PTR>(LPVOID_t(BaseAddress).ptr, &BaseAddress);
+					read_memory <uintptr_t>(BaseAddress, &BaseAddress);
 					BaseAddress = BaseAddress + offset;
 				}
-				read_memory <T>(LPVOID_t(BaseAddress).ptr, &ret);
+				read_memory <T>(BaseAddress, &ret);
 				return ret;
 			}
 
-			template <typename T> void write(DWORD_PTR BaseAddress, T value, const vector <INT64>& offsets = {}) const
+			template <typename T> void write(uintptr_t BaseAddress, T value, const std::vector <int64_t>& offsets = {}) const
 			{
 				for (const auto offset : offsets)
 				{
@@ -139,46 +123,46 @@ namespace BF
 					{
 						return;
 					}
-					read_memory <DWORD_PTR>(LPVOID_t(BaseAddress).ptr, &BaseAddress);
+					read_memory <uintptr_t>(BaseAddress, &BaseAddress);
 					BaseAddress = BaseAddress + offset;
 				}
-				write_memory <T>(LPVOID_t(BaseAddress).ptr, &value);
+				write_memory <T>(BaseAddress, &value);
 			}
 
-			template <typename T> void write(DWORD_PTR BaseAddress, const vector <INT64>& offsets, T value) const
+			template <typename T> void write(uintptr_t BaseAddress, const std::vector <int64_t>& offsets, T value) const
 			{
 				write(BaseAddress, value, offsets);
 			}
 
-			[[nodiscard]] string read_str(DWORD_PTR BaseAddress, SIZE_T nSize, const vector <INT64>& offsets = {}) const;
-			void                 write_str(DWORD_PTR BaseAddress, string_view str, SIZE_T nSize, const vector <INT64>& offsets = {}) const;
+			[[nodiscard]] std::string read_str(uintptr_t BaseAddress, size_t nSize, const std::vector <int64_t>& offsets = {}) const;
+			void                      write_str(uintptr_t BaseAddress, std::string_view str, size_t nSize, const std::vector <int64_t>& offsets = {}) const;
 
 			[[nodiscard]] bool is_empty() const
 			{
-				return ProcessID == NULL || ProcessHandle == nullptr || ProcessHWND == nullptr || BaseAddr == NULL || Size == NULL;
+				return process_id == NULL || process_handle == nullptr || process_hwnd == nullptr || base_address == NULL || process_size == NULL;
 			}
 
 			[[nodiscard]] bool is_running() const
 			{
-				return WaitForSingleObject(ProcessHandle, 0) == WAIT_TIMEOUT;
+				return WaitForSingleObject(process_handle, 0) == WAIT_TIMEOUT;
 			}
 
-			template <typename T> BOOL read_memory(const LPCVOID lpBaseAddress, const LPVOID lpBuffer, const SIZE_T nSize = sizeof(T), SIZE_T* lpNumberOfBytesRead = nullptr) const
+			template <typename T> bool read_memory(const uintptr_t lpBaseAddress, void* const lpBuffer, const size_t nSize = sizeof(T), size_t* const lpNumberOfBytesRead = nullptr) const
 			{
-				return ReadProcessMemory(ProcessHandle, lpBaseAddress, lpBuffer, nSize, lpNumberOfBytesRead);
+				return ReadProcessMemory(process_handle, reinterpret_cast <void*>(lpBaseAddress), lpBuffer, nSize, lpNumberOfBytesRead);
 			}
 
-			template <typename T> BOOL write_memory(const LPVOID lpBaseAddress, const LPCVOID lpBuffer, const SIZE_T nSize = sizeof(T), SIZE_T* lpNumberOfBytesWritten = nullptr) const
+			template <typename T> bool write_memory(const uintptr_t lpBaseAddress, const void* const lpBuffer, const size_t nSize = sizeof(T), size_t* const lpNumberOfBytesWritten = nullptr) const
 			{
-				return WriteProcessMemory(ProcessHandle, lpBaseAddress, lpBuffer, nSize, lpNumberOfBytesWritten);
+				return WriteProcessMemory(process_handle, reinterpret_cast <void*>(lpBaseAddress), lpBuffer, nSize, lpNumberOfBytesWritten);
 			}
 
-			[[nodiscard]] INT64 get_global_addr(const int index) const
+			[[nodiscard]] int64_t get_global_addr(const int index) const
 			{
-				return read <INT64>(pointers.GlobalPTR + sizeof(INT64) * (index >> 0x12 & 0x3F)) + static_cast <INT64>(sizeof(INT64)) * (index & 0x3FFFF);
+				return read <int64_t>(pointers.GlobalPTR + sizeof(int64_t) * (index >> 0x12 & 0x3F)) + static_cast <int64_t>(sizeof(int64_t)) * (index & 0x3FFFF);
 			}
 
-			template <typename T> T get_global(const int index)
+			template <typename T> [[nodiscard]] T get_global(const int index)
 			{
 				return read <T>(get_global_addr(index));
 			}
@@ -188,61 +172,61 @@ namespace BF
 				write <T>(get_global_addr(index), value);
 			}
 
-			[[nodiscard]] INT64 get_local_addr(const string_view name, const int index) const
+			[[nodiscard]] int64_t get_local_addr(const std::string_view name, const int index) const
 			{
 				for (auto i = 0; i < 54; i++)
 				{
-					if (const string str = read_str(pointers.LocalScriptsPTR, MAX_PATH, { static_cast <INT64>(i) * 0x8, 0xD0 }); str == name)
+					if (const std::string str = read_str(pointers.LocalScriptsPTR, MAX_PATH, { static_cast <int64_t>(i) * 0x8, 0xD0 }); str == name)
 					{
-						return read <INT64>(pointers.LocalScriptsPTR, { static_cast <INT64>(i) * 0x8, 0xB0 }) + 8ll * index;
+						return read <int64_t>(pointers.LocalScriptsPTR, { static_cast <int64_t>(i) * 0x8, 0xB0 }) + 8ll * index;
 					}
 				}
 				return NULL;
 			}
 
-			template <typename T> T get_local(const string_view name, const int index)
+			template <typename T> [[nodiscard]] T get_local(const std::string_view name, const int index)
 			{
 				return read <T>(get_local_addr(name, index));
 			}
 
-			template <typename T> void set_local(const string_view name, const int index, T value)
+			template <typename T> void set_local(const std::string_view name, const int index, T value)
 			{
 				write <T>(get_local_addr(name, index), {}, value);
 			}
 
-			[[nodiscard]] wstring_view name() const
+			[[nodiscard]] std::wstring_view name() const
 			{
-				return ProcessName;
+				return process_name;
 			}
 
 			[[nodiscard]] HANDLE handle() const
 			{
-				return ProcessHandle;
+				return process_handle;
 			}
 
 			[[nodiscard]] static HWND find_window_hwnd()
 			{
-				return FindWindowA("grcWindow", nullptr);
+				return FindWindow(L"grcWindow", nullptr);
 			}
 
 			[[nodiscard]] HWND hwnd() const
 			{
-				return ProcessHWND;
+				return process_hwnd;
 			}
 
-			[[nodiscard]] UINT pid() const
+			[[nodiscard]] uint32_t pid() const
 			{
-				return ProcessID;
+				return process_id;
 			}
 
-			[[nodiscard]] DWORD_PTR baseAddr() const
+			[[nodiscard]] uintptr_t baseAddr() const
 			{
-				return BaseAddr;
+				return base_address;
 			}
 
-			[[nodiscard]] UINT size() const
+			[[nodiscard]] uint32_t size() const
 			{
-				return Size;
+				return process_size;
 			}
 	};
 

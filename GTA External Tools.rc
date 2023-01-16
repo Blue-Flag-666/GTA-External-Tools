@@ -34,18 +34,6 @@ LANGUAGE LANG_CHINESE, SUBLANG_CHINESE_SIMPLIFIED
 IDI_GTAEXTERNALTOOLS    ICON                    "GTA External Tools.ico"
 
 
-/////////////////////////////////////////////////////////////////////////////
-//
-// Accelerator
-//
-
-IDC_GTAEXTERNALTOOLS ACCELERATORS
-BEGIN
-    "?",            IDM_ABOUT,              ASCII,  ALT
-    "/",            IDM_ABOUT,              ASCII,  ALT
-END
-
-
 #ifdef APSTUDIO_INVOKED
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -84,7 +72,6 @@ END
 
 STRINGTABLE
 BEGIN
-    IDS_APP_TITLE           "GTA External Tools"
     IDC_GTAEXTERNALTOOLS    "GTAEXTERNALTOOLS"
 END
 
