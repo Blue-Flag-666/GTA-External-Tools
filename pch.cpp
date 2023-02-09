@@ -11,38 +11,38 @@ namespace BF
 		return 0;
 	}
 
-	void alloc_console()
+	void AllocCon()
 	{
 		AllocConsole();
 		FILE* stream;
 		if (freopen_s(&stream, "CON", "r", stdin) || freopen_s(&stream, "CON", "w", stdout) || freopen_s(&stream, "CON", "w", stderr))
 		{
-			MessageBox(nullptr, L"打开控制台失败", overlay_title.data(),MB_OK);
+			MessageBox(nullptr, L"打开控制台失败", OverlayTitle.data(),MB_OK);
 			throw std::exception("打开控制台失败");
 		}
-		if (const auto consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE); consoleHandle)
+		if (const auto handle = GetStdHandle(STD_OUTPUT_HANDLE); handle)
 		{
 			SetConsoleCP(CP_UTF8);
 			SetConsoleOutputCP(CP_UTF8);
 
-			SetConsoleTitle(overlay_title.data());
+			SetConsoleTitle(OverlayTitle.data());
 
-			DWORD console_mode;
-			GetConsoleMode(consoleHandle, &console_mode);
+			DWORD mode;
+			GetConsoleMode(handle, &mode);
 
-			console_mode = console_mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN;
-			console_mode = console_mode & ~ENABLE_QUICK_EDIT_MODE;
+			mode = mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN;
+			mode = mode & ~ENABLE_QUICK_EDIT_MODE;
 
-			SetConsoleMode(consoleHandle, console_mode);
+			SetConsoleMode(handle, mode);
 		}
 	}
 
-	void clear_console()
+	void ClearConsole()
 	{
-		const HANDLE               console = GetStdHandle(STD_OUTPUT_HANDLE);
+		const HANDLE               handle = GetStdHandle(STD_OUTPUT_HANDLE);
 		CONSOLE_SCREEN_BUFFER_INFO csbi;
 
-		if (!GetConsoleScreenBufferInfo(console, &csbi))
+		if (!GetConsoleScreenBufferInfo(handle, &csbi))
 		{
 			return;
 		}
@@ -51,15 +51,15 @@ namespace BF
 		const COORD      scroll { 0, static_cast <short>(-csbi.dwSize.Y) };
 		const CHAR_INFO  fill { { ' ' }, csbi.wAttributes };
 
-		ScrollConsoleScreenBuffer(console, &rect, nullptr, scroll, &fill);
+		ScrollConsoleScreenBuffer(handle, &rect, nullptr, scroll, &fill);
 
 		csbi.dwCursorPosition.X = 0;
 		csbi.dwCursorPosition.Y = 0;
 
-		SetConsoleCursorPosition(console, csbi.dwCursorPosition);
+		SetConsoleCursorPosition(handle, csbi.dwCursorPosition);
 	}
 
-	std::string to_string(const scan_type type)
+	std::string to_string(const ScanType type)
 	{
 		switch (type)
 		{

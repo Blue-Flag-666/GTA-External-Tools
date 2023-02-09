@@ -4,18 +4,18 @@
 
 HWND GetProcessMainWnd(const DWORD dwProcessId)
 {
-	WNDINFO                   wndInfo { nullptr, dwProcessId };
+	const WNDINFO             wndInfo { nullptr, dwProcessId };
 	EnumWindows([](const HWND hWnd, const LPARAM lParam) ->BOOL
 	{
 		DWORD ProcessId = 0;
 		GetWindowThreadProcessId(hWnd, &ProcessId);
-		if (const auto pInfo = reinterpret_cast <WNDINFO*>(lParam); ProcessId == pInfo->dwProcessId)
+		if (const auto pInfo = static_cast <WNDINFO*>(BF::int64_to_void(lParam)); ProcessId == pInfo->dwProcessId)
 		{
 			pInfo->hWnd = hWnd;
 			return FALSE;
 		}
 		return TRUE;
-	}, reinterpret_cast <LPARAM>(&wndInfo));
+	}, static_cast <LPARAM>(BF::void_to_int64(&wndInfo)));
 
 	return wndInfo.hWnd;
 }
@@ -76,8 +76,6 @@ namespace BF
 {
 	uintptr_t Memory::Pointers::Pattern::AOBScan(const std::string_view pattern)
 	{
-		constexpr auto CHUNK_SIZE = 0x1000;
-
 		std::vector <std::optional <uint8_t>> compiled;
 
 		uint8_t hexchar = 0;
@@ -108,19 +106,19 @@ namespace BF
 			}
 		}
 
-		size_t     i      = GTA5.base_address;
-		const auto membuf = new uint8_t[CHUNK_SIZE];
+		size_t i = GTA5.base_address;
 
 		uintptr_t ret = 0;
 
 		while (!ret)
 		{
+			constexpr auto CHUNK_SIZE = 0x1000;
 			if (i >= GTA5.base_address + GTA5.process_size)
 			{
 				break;
 			}
 
-			if (GTA5.read_memory <uint8_t*>(i, membuf, CHUNK_SIZE))
+			if (uint8_t membuf[CHUNK_SIZE]; GTA5.read_mem <uint8_t*>(i, membuf, CHUNK_SIZE))
 			{
 				for (auto j = 0; j < CHUNK_SIZE; j++)
 				{
@@ -147,13 +145,11 @@ namespace BF
 			i = i + CHUNK_SIZE;
 		}
 
-		delete[] membuf;
-
 		if (ret == NULL)
 		{
 			if (!skip_memory_init)
 			{
-				MessageBox(nullptr, L"初始化失败", overlay_title.data(),MB_OK);
+				MessageBox(nullptr, L"初始化失败", OverlayTitle.data(),MB_OK);
 				throw std::exception("初始化失败");
 			}
 		}
@@ -171,7 +167,7 @@ namespace BF
 		PROCESSENTRY32 PE32;
 		if (!ListSystemProcesses(const_cast <wchar_t*>(name.data()), &PE32))
 		{
-			MessageBox(nullptr, L"未找到 GTA5 进程", overlay_title.data(),MB_OK);
+			MessageBox(nullptr, L"未找到 GTA5 进程", OverlayTitle.data(),MB_OK);
 			throw std::exception("未找到 GTA5 进程");
 		}
 		process_id     = PE32.th32ProcessID;
@@ -179,52 +175,49 @@ namespace BF
 		process_hwnd   = GetProcessMainWnd(process_id);
 		if (!process_handle)
 		{
-			MessageBox(nullptr, L"未找到 GTA5 进程", overlay_title.data(),MB_OK);
+			MessageBox(nullptr, L"未找到 GTA5 进程", OverlayTitle.data(),MB_OK);
 			throw std::exception("未找到 GTA5 进程");
 		}
 
 		MODULEENTRY32 ME32;
 		if (!ListProcessModules(process_id, name.data(), &ME32))
 		{
-			MessageBox(nullptr, L"未找到 GTA5 进程", overlay_title.data(),MB_OK);
+			MessageBox(nullptr, L"未找到 GTA5 进程", OverlayTitle.data(),MB_OK);
 			throw std::exception("未找到 GTA5 进程");
 		}
 
-		base_address = reinterpret_cast <uintptr_t>(ME32.modBaseAddr);
+		base_address = void_to_int64(ME32.modBaseAddr);
 		process_size = ME32.modBaseSize;
 	}
 
-	std::string Memory::read_str(uintptr_t BaseAddress, const size_t nSize, const std::vector <int64_t>& offsets) const
+	std::string Memory::read_str(uintptr_t base, const size_t size, const std::vector <ptrdiff_t>& offsets) const
 	{
-		const auto str = new char[nSize];
-		memset(str, 0, nSize);
+		std::string str;
+		str.reserve(size);
 		for (const auto offset : offsets)
 		{
-			if (BaseAddress == 0)
+			if (base == 0)
 			{
-				delete[] str;
 				return {};
 			}
-			read_memory <uintptr_t>(BaseAddress, &BaseAddress);
-			BaseAddress = BaseAddress + offset;
+			read_mem <uintptr_t>(base, &base);
+			base = base + offset;
 		}
-		write_memory <char>(BaseAddress, str, nSize);
-		const std::string ret = str;
-		delete[] str;
-		return ret;
+		write_mem <char>(base, str.data(), size);
+		return str;
 	}
 
-	void Memory::write_str(uintptr_t BaseAddress, std::string_view str, const size_t nSize, const std::vector <int64_t>& offsets) const
+	void Memory::write_str(uintptr_t base, std::string_view str, const size_t size, const std::vector <ptrdiff_t>& offsets) const
 	{
 		for (const auto offset : offsets)
 		{
-			if (BaseAddress == 0)
+			if (base == 0)
 			{
 				return;
 			}
-			read_memory <uintptr_t>(BaseAddress, &BaseAddress);
-			BaseAddress = BaseAddress + offset;
+			read_mem <uintptr_t>(base, &base);
+			base = base + offset;
 		}
-		read_memory <char>(BaseAddress, const_cast <char* const>(str.data()), nSize);
+		read_mem <char>(base, const_cast <char* const>(str.data()), size);
 	}
 }

@@ -109,6 +109,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="framework.hpp" />
+    <ClInclude Include="Global Local Scanner.hpp" />
     <ClInclude Include="GTA External Tools.hpp" />
     <ClInclude Include="imgui\backends\imgui_impl_dx11.h" />
     <ClInclude Include="imgui\backends\imgui_impl_win32.h" />
@@ -124,6 +125,7 @@
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Global Local Scanner.cpp" />
     <ClCompile Include="GTA External Tools.cpp" />
     <ClCompile Include="imgui\backends\imgui_impl_dx11.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>

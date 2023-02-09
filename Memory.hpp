@@ -28,20 +28,8 @@ namespace BF
 
 		struct Pointers
 		{
-			uintptr_t WorldPTR           = NULL;
-			uintptr_t BlipPTR            = NULL;
-			uintptr_t ReplayInterfacePTR = NULL;
-			uintptr_t LocalScriptsPTR    = NULL;
-			uintptr_t GlobalPTR          = NULL;
-			uintptr_t PlayerCountPTR     = NULL;
-			uintptr_t PickupDataPTR      = NULL;
-			uintptr_t WeatherADDR        = NULL;
-			uintptr_t SettingsPTRs       = NULL;
-			uintptr_t AimCPedPTR         = NULL;
-			uintptr_t FriendListPTR      = NULL;
-			uintptr_t ThermalADDR        = NULL;
-			uintptr_t NightVisionADDR    = NULL;
-			uintptr_t BlackoutADDR       = NULL;
+			uintptr_t global_ptr        = NULL;
+			uintptr_t local_scripts_ptr = NULL;
 
 			class Pattern
 			{
@@ -77,20 +65,8 @@ namespace BF
 
 			Pointers() = default;
 
-			explicit Pointers(bool /*unused*/) : WorldPTR(Pattern("WorldPTR", "48 8B 05 ? ? ? ? 45 ? ? ? ? 48 8B 48 08 48 85 C9 74 07").add(3).rip()),
-												 BlipPTR(Pattern("BlipPTR", "4C 8D 05 ? ? ? ? 0F B7 C1").add(3).rip()),
-												 ReplayInterfacePTR(Pattern("ReplayInterfacePTR", "48 8D 0D ? ? ? ? 48 8B D7 E8 ? ? ? ? 48 8D 0D ? ? ? ? 8A D8 E8").add(3).rip()),
-												 LocalScriptsPTR(Pattern("LocalScriptsPTR", "48 8B 05 ? ? ? ? 8B CF 48 8B 0C C8 39 59 68").add(3).rip()),
-												 GlobalPTR(Pattern("GlobalPTR", "4C 8D 05 ? ? ? ? 4D 8B 08 4D 85 C9 74 11").add(3).rip()),
-												 PlayerCountPTR(Pattern("PlayerCountPTR", "48 8B 0D ? ? ? ? E8 ? ? ? ? 48 8B C8 E8 ? ? ? ? 48 8B CF").add(3).rip()),
-												 PickupDataPTR(Pattern("PickupDataPTR", "48 8B 05 ? ? ? ? 48 8B 1C F8 8B").add(3).rip()),
-												 WeatherADDR(Pattern("WeatherADDR", "48 83 EC ? 8B 05 ? ? ? ? 8B 3D ? ? ? ? 49").add(6).rip().add(6)),
-												 SettingsPTRs(Pattern("SettingsPTRs", "44 39 05 ? ? ? ? 75 0D").add(3).rip().add(0x89 - 4)),
-												 AimCPedPTR(Pattern("AimCPedPTR", "48 8B 0D ? ? ? ? 48 85 C9 74 0C 48 8D 15 ? ? ? ? E8 ? ? ? ? 48 89 1D").add(3).rip()),
-												 FriendListPTR(Pattern("FriendListPTR", "48 8B 0D ? ? ? ? 8B C6 48 8D 5C 24 70").add(3).rip()),
-												 ThermalADDR(Pattern("ThermalADDR", "48 83 EC ? 80 3D ? ? ? ? 00 74 0C C6 81").add(6).rip().add(7)),
-												 NightVisionADDR(Pattern("NightVisionADDR", "48 8B D7 48 8B C8 E8 ? ? ? ? 80 3D").add(13).rip().add(14)),
-												 BlackoutADDR(Pattern("BlackoutADDR", "48 8B D1 8B 0D ? ? ? ? 45 8D 41 FC E9 ? ? ? ? 48 83").add(31).rip().add(31)) {}
+			explicit Pointers(bool) : global_ptr(Pattern("GlobalPTR", "4C 8D 05 ? ? ? ? 4D 8B 08 4D 85 C9 74 11").add(3).rip()),
+									  local_scripts_ptr(Pattern("LocalScriptsPTR", "48 8B 05 ? ? ? ? 8B CF 48 8B 0C C8 39 59 68").add(3).rip()) {}
 		};
 
 		public:
@@ -99,67 +75,67 @@ namespace BF
 			Memory() = default;
 			explicit Memory(std::wstring_view name);
 
-			template <typename T> [[nodiscard]] T read(uintptr_t BaseAddress, const std::vector <int64_t>& offsets = {}) const
+			template <typename T> [[nodiscard]] T read(uintptr_t base, const std::vector <ptrdiff_t>& offsets = {}) const
 			{
 				T ret = 0;
 				for (const auto offset : offsets)
 				{
-					if (BaseAddress == 0)
+					if (base == 0)
 					{
 						return T();
 					}
-					read_memory <uintptr_t>(BaseAddress, &BaseAddress);
-					BaseAddress = BaseAddress + offset;
+					read_mem <uintptr_t>(base, &base);
+					base = base + offset;
 				}
-				read_memory <T>(BaseAddress, &ret);
+				read_mem <T>(base, &ret);
 				return ret;
 			}
 
-			template <typename T> void write(uintptr_t BaseAddress, T value, const std::vector <int64_t>& offsets = {}) const
+			template <typename T> void write(uintptr_t base, T value, const std::vector <ptrdiff_t>& offsets = {}) const
 			{
 				for (const auto offset : offsets)
 				{
-					if (BaseAddress == 0)
+					if (base == 0)
 					{
 						return;
 					}
-					read_memory <uintptr_t>(BaseAddress, &BaseAddress);
-					BaseAddress = BaseAddress + offset;
+					read_mem <uintptr_t>(base, &base);
+					base = base + offset;
 				}
-				write_memory <T>(BaseAddress, &value);
+				write_mem <T>(base, &value);
 			}
 
-			template <typename T> void write(uintptr_t BaseAddress, const std::vector <int64_t>& offsets, T value) const
+			template <typename T> void write(uintptr_t base, const std::vector <ptrdiff_t>& offsets, T value) const
 			{
-				write(BaseAddress, value, offsets);
+				write(base, value, offsets);
 			}
 
-			[[nodiscard]] std::string read_str(uintptr_t BaseAddress, size_t nSize, const std::vector <int64_t>& offsets = {}) const;
-			void                      write_str(uintptr_t BaseAddress, std::string_view str, size_t nSize, const std::vector <int64_t>& offsets = {}) const;
+			[[nodiscard]] std::string read_str(uintptr_t base, size_t size, const std::vector <ptrdiff_t>& offsets = {}) const;
+			void                      write_str(uintptr_t base, std::string_view str, size_t size, const std::vector <ptrdiff_t>& offsets = {}) const;
 
-			[[nodiscard]] bool is_empty() const
+			[[nodiscard]] bool empty() const
 			{
 				return process_id == NULL || process_handle == nullptr || process_hwnd == nullptr || base_address == NULL || process_size == NULL;
 			}
 
-			[[nodiscard]] bool is_running() const
+			[[nodiscard]] bool running() const
 			{
 				return WaitForSingleObject(process_handle, 0) == WAIT_TIMEOUT;
 			}
 
-			template <typename T> bool read_memory(const uintptr_t lpBaseAddress, void* const lpBuffer, const size_t nSize = sizeof(T), size_t* const lpNumberOfBytesRead = nullptr) const
+			template <typename T> bool read_mem(const uintptr_t base, void* const buffer, const size_t size = sizeof(T), size_t* const number_of_bytes_read = nullptr) const
 			{
-				return ReadProcessMemory(process_handle, reinterpret_cast <void*>(lpBaseAddress), lpBuffer, nSize, lpNumberOfBytesRead);
+				return ReadProcessMemory(process_handle, int64_to_void(base), buffer, size, number_of_bytes_read);
 			}
 
-			template <typename T> bool write_memory(const uintptr_t lpBaseAddress, const void* const lpBuffer, const size_t nSize = sizeof(T), size_t* const lpNumberOfBytesWritten = nullptr) const
+			template <typename T> bool write_mem(const uintptr_t base, const void* const buffer, const size_t size = sizeof(T), size_t* const number_of_bytes_written = nullptr) const
 			{
-				return WriteProcessMemory(process_handle, reinterpret_cast <void*>(lpBaseAddress), lpBuffer, nSize, lpNumberOfBytesWritten);
+				return WriteProcessMemory(process_handle, int64_to_void(base), buffer, size, number_of_bytes_written);
 			}
 
 			[[nodiscard]] int64_t get_global_addr(const int index) const
 			{
-				return read <int64_t>(pointers.GlobalPTR + sizeof(int64_t) * (index >> 0x12 & 0x3F)) + static_cast <int64_t>(sizeof(int64_t)) * (index & 0x3FFFF);
+				return read <ptrdiff_t>(pointers.global_ptr + sizeof(ptrdiff_t) * (index >> 0x12 & 0x3F)) + static_cast <ptrdiff_t>(sizeof(ptrdiff_t)) * (index & 0x3FFFF);
 			}
 
 			template <typename T> [[nodiscard]] T get_global(const int index)
@@ -176,9 +152,9 @@ namespace BF
 			{
 				for (auto i = 0; i < 54; i++)
 				{
-					if (const std::string str = read_str(pointers.LocalScriptsPTR, MAX_PATH, { static_cast <int64_t>(i) * 0x8, 0xD0 }); str == name)
+					if (const std::string str = read_str(pointers.local_scripts_ptr, MAX_PATH, { static_cast <ptrdiff_t>(i) * 0x8, 0xD0 }); str == name)
 					{
-						return read <int64_t>(pointers.LocalScriptsPTR, { static_cast <int64_t>(i) * 0x8, 0xB0 }) + 8ll * index;
+						return read <ptrdiff_t>(pointers.local_scripts_ptr, { static_cast <ptrdiff_t>(i) * 0x8, 0xB0 }) + 8ll * index;
 					}
 				}
 				return NULL;
@@ -204,7 +180,7 @@ namespace BF
 				return process_handle;
 			}
 
-			[[nodiscard]] static HWND find_window_hwnd()
+			[[nodiscard]] static HWND find()
 			{
 				return FindWindow(L"grcWindow", nullptr);
 			}
@@ -219,7 +195,7 @@ namespace BF
 				return process_id;
 			}
 
-			[[nodiscard]] uintptr_t baseAddr() const
+			[[nodiscard]] uintptr_t base_addr() const
 			{
 				return base_address;
 			}

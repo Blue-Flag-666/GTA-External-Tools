@@ -20,10 +20,10 @@
 
 namespace BF
 {
-	constexpr std::wstring_view overlay_title = L"GTA External Tools";            // 标题
-	constexpr auto              EPS           = 1e-8;
-	constexpr auto              MAX_STR_LEN   = 0x100;
-	constexpr auto              MAX_NAME_LEN  = 0x20;
+	constexpr std::wstring_view OverlayTitle = L"GTA External Tools";            // 标题
+	constexpr auto              EPS          = 1e-8;
+	constexpr auto              MAX_STR_LEN  = 0x100;
+	constexpr auto              MAX_NAME_LEN = 0x20;
 
 	template <typename T> bool equal(T x, T y)
 	{
@@ -37,10 +37,20 @@ namespace BF
 
 	uint8_t to_hex(char c);
 
-	void alloc_console();
-	void clear_console();
+	inline void* int64_to_void(const uintptr_t value)
+	{
+		return reinterpret_cast <void*>(value);  // NOLINT(performance-no-int-to-ptr)
+	}
 
-	enum scan_type
+	inline uintptr_t void_to_int64(const void* value)
+	{
+		return reinterpret_cast <uintptr_t>(value);
+	}
+
+	void AllocCon();
+	void ClearConsole();
+
+	enum ScanType
 	{
 		SCAN_BOOL   = 0b1,
 		SCAN_FLOAT  = 0b10,
@@ -51,9 +61,9 @@ namespace BF
 		SCAN_NONE   = 0
 	};
 
-	std::string to_string(scan_type type);
+	std::string to_string(ScanType type);
 
-	struct scan_value
+	struct ScanValue
 	{
 		bool     bool_value                = true;
 		float    float_value               = 0;
@@ -61,31 +71,31 @@ namespace BF
 		uint32_t uint_value                = 0;
 		char     string_value[MAX_STR_LEN] = "";
 
-		scan_value() = default;
+		ScanValue() = default;
 
-		explicit scan_value(const bool value): bool_value(value) {}
+		explicit ScanValue(const bool value): bool_value(value) {}
 
-		explicit scan_value(const float value): float_value(value),
+		explicit ScanValue(const float value): float_value(value),
+											   int_value(static_cast <int>(value)),
+											   uint_value(static_cast <uint32_t>(value)) {}
+
+		explicit ScanValue(const double value): float_value(static_cast <float>(value)),
 												int_value(static_cast <int>(value)),
 												uint_value(static_cast <uint32_t>(value)) {}
 
-		explicit scan_value(const double value): float_value(static_cast <float>(value)),
-												 int_value(static_cast <int>(value)),
-												 uint_value(static_cast <uint32_t>(value)) {}
+		explicit ScanValue(const int value): int_value(value),
+											 uint_value(value) {}
 
-		explicit scan_value(const int value): int_value(value),
-											  uint_value(value) {}
+		explicit ScanValue(const uint32_t value): uint_value(value) {}
 
-		explicit scan_value(const uint32_t value): uint_value(value) {}
-
-		explicit scan_value(const char* value)
+		explicit ScanValue(const char* value)
 		{
 			strcpy_s(string_value, value);
 		}
 
 		void reset(const char* value)
 		{
-			if (value == string_value)
+			if (string_value == value)
 			{
 				bool_value  = true;
 				float_value = 0;
@@ -94,34 +104,34 @@ namespace BF
 			}
 			else
 			{
-				*this = scan_value(value);
+				*this = ScanValue(value);
 			}
 		}
 	};
 
-	struct scan_result
+	struct ScanResult
 	{
-		int        offset = 0;
-		scan_type  type   = SCAN_INT;
-		scan_value previous_value;
+		int       offset = 0;
+		ScanType  type   = SCAN_INT;
+		ScanValue prev;
 
-		scan_result(const int offset, const scan_type type) : offset(offset),
-															  type(type) {}
+		ScanResult(const int offset, const ScanType type) : offset(offset),
+															type(type) {}
 
-		bool operator<(const scan_result& x) const
+		bool operator<(const ScanResult& x) const
 		{
 			return offset < x.offset || (offset == x.offset && type < x.type);
 		}
 	};
 
-	struct scan_item
+	struct ScanItem
 	{
-		char      name[MAX_NAME_LEN] = "Unnamed";
-		int       offset             = 0;
-		scan_type type               = SCAN_INT;
+		char     name[MAX_NAME_LEN] = "Unnamed";
+		int      offset             = 0;
+		ScanType type               = SCAN_INT;
 
-		scan_item(const int offset, const scan_type type) : offset(offset),
-															type(type) {}
+		ScanItem(const int offset, const ScanType type) : offset(offset),
+														  type(type) {}
 	};
 }
 
