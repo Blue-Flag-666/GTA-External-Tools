@@ -35,7 +35,7 @@ namespace BF
 		return abs(static_cast <double>(x) - static_cast <double>(y)) < EPS;
 	}
 
-	uint8_t to_hex(char c);
+	uint8_t hex_to_dec(char c);
 
 	inline void* int64_to_void(const uintptr_t value)
 	{

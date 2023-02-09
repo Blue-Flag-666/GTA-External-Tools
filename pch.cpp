@@ -2,11 +2,19 @@
 
 namespace BF
 {
-	uint8_t to_hex(const char c)
+	uint8_t hex_to_dec(const char c)
 	{
-		if ('0' <= c && c <= '9' || 'A' <= c && c <= 'F')
+		if ('0' <= c && c <= '9')
 		{
 			return c - '0';
+		}
+		if ('A' <= c && c <= 'F')
+		{
+			return c - 'A' + 10;
+		}
+		if ('a' <= c && c <= 'f')
+		{
+			return c - 'a' + 10;
 		}
 		return 0;
 	}

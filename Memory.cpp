@@ -95,7 +95,7 @@ namespace BF
 				{
 					continue;
 				}
-				hexchar = hexchar + (first ? to_hex(c) * 0x10 : to_hex(c));
+				hexchar = hexchar + (first ? hex_to_dec(c) * 0x10 : hex_to_dec(c));
 
 				if (!first)
 				{
